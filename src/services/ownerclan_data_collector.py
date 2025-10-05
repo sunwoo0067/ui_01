@@ -199,20 +199,33 @@ class OwnerClanDataCollector:
     async def collect_orders(self, account_name: str,
                            limit: int = 100,
                            start_date: Optional[datetime] = None,
-                           end_date: Optional[datetime] = None) -> List[Dict[str, Any]]:
+                           end_date: Optional[datetime] = None,
+                           shipped_after: Optional[datetime] = None,
+                           shipped_before: Optional[datetime] = None) -> List[Dict[str, Any]]:
         """주문 데이터 수집"""
         try:
             logger.info(f"주문 데이터 수집 시작: {account_name}")
             
-            # 날짜 기본값 설정
+            # 날짜 기본값 설정 (최대 90일 제한)
             if not start_date:
-                start_date = datetime.now() - timedelta(days=30)
+                start_date = datetime.now() - timedelta(days=90)
             if not end_date:
                 end_date = datetime.now()
             
+            # 90일 제한 확인
+            if (end_date - start_date).days > 90:
+                logger.warning("날짜 범위가 90일을 초과합니다. 90일로 제한합니다.")
+                start_date = end_date - timedelta(days=90)
+            
+            # Unix timestamp로 변환
+            date_from_timestamp = int(start_date.timestamp())
+            date_to_timestamp = int(end_date.timestamp())
+            shipped_after_timestamp = int(shipped_after.timestamp()) if shipped_after else None
+            shipped_before_timestamp = int(shipped_before.timestamp()) if shipped_before else None
+            
             query = """
-            query {
-                allOrders {
+            query AllOrders($dateFrom: Timestamp, $dateTo: Timestamp, $shippedAfter: Timestamp, $shippedBefore: Timestamp) {
+                allOrders(dateFrom: $dateFrom, dateTo: $dateTo, shippedAfter: $shippedAfter, shippedBefore: $shippedBefore) {
                     edges {
                         node {
                             key
@@ -232,16 +245,16 @@ class OwnerClanDataCollector:
                             shippingInfo {
                                 sender {
                                     name
-                                    phone
+                                    phoneNumber
                                 }
                                 recipient {
                                     name
-                                    phone
-                                }
-                                destinationAddress {
-                                    address
-                                    detailAddress
-                                    zipCode
+                                    phoneNumber
+                                    destinationAddress {
+                                        addr1
+                                        addr2
+                                        postalCode
+                                    }
                                 }
                                 shippingFee
                             }
@@ -253,10 +266,17 @@ class OwnerClanDataCollector:
                         }
                     }
                 }
+               }
+               """
+               
+            variables = {
+                "dateFrom": date_from_timestamp,
+                "dateTo": date_to_timestamp,
+                "shippedAfter": shipped_after_timestamp,
+                "shippedBefore": shipped_before_timestamp
             }
-            """
             
-            result = await self._make_graphql_request(query, account_name)
+            result = await self._make_graphql_request(query, account_name, variables)
             if not result or "data" not in result:
                 logger.error("주문 데이터 수집 실패")
                 return []
