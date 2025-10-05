@@ -13,11 +13,19 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from loguru import logger
 
-from src.services.database_service import DatabaseService
-from src.services.coupang_search_service import CoupangSearchService
-from src.services.naver_smartstore_search_service import NaverSmartStoreSearchService
-from src.services.price_comparison_service import PriceComparisonService
-from src.services.competitor_data_scheduler import CompetitorDataScheduler
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from services.database_service import DatabaseService
+from services.coupang_search_service import CoupangSearchService
+from services.naver_smartstore_search_service import NaverSmartStoreSearchService
+from services.elevenstreet_search_service import ElevenStreetSearchService
+from services.gmarket_search_service import GmarketSearchService
+from services.auction_search_service import AuctionSearchService
+from services.unified_marketplace_search_service import UnifiedMarketplaceSearchService
+from services.price_comparison_service import PriceComparisonService
+from services.competitor_data_scheduler import CompetitorDataScheduler
 
 
 # FastAPI 앱 생성
@@ -46,6 +54,18 @@ def get_coupang_service():
 def get_naver_service():
     return NaverSmartStoreSearchService()
 
+def get_elevenstreet_service():
+    return ElevenStreetSearchService()
+
+def get_gmarket_service():
+    return GmarketSearchService()
+
+def get_auction_service():
+    return AuctionSearchService()
+
+def get_unified_service():
+    return UnifiedMarketplaceSearchService()
+
 def get_price_comparison_service():
     return PriceComparisonService()
 
@@ -57,7 +77,7 @@ def get_scheduler():
 class ProductSearchRequest(BaseModel):
     keyword: str
     page: int = 1
-    platform: str = "all"  # coupang, naver, all
+    platform: str = "all"  # coupang, naver_smartstore, 11st, gmarket, auction, all
 
 class PriceComparisonRequest(BaseModel):
     keyword: str
@@ -146,31 +166,31 @@ async def get_dashboard_stats(db_service: DatabaseService = Depends(get_db_servi
 @app.post("/api/search/products")
 async def search_products(
     request: ProductSearchRequest,
-    coupang_service: CoupangSearchService = Depends(get_coupang_service),
-    naver_service: NaverSmartStoreSearchService = Depends(get_naver_service)
+    unified_service: UnifiedMarketplaceSearchService = Depends(get_unified_service)
 ):
-    """상품 검색"""
+    """상품 검색 (통합 마켓플레이스)"""
     try:
-        results = {}
-        
-        if request.platform in ["coupang", "all"]:
-            coupang_products = await coupang_service.search_products(
+        if request.platform == "all":
+            # 모든 플랫폼에서 검색
+            results = await unified_service.search_all_platforms(
                 keyword=request.keyword,
                 page=request.page
             )
-            results["coupang"] = [product.dict() for product in coupang_products]
-        
-        if request.platform in ["naver", "all"]:
-            naver_products = await naver_service.search_products(
+        else:
+            # 특정 플랫폼에서만 검색
+            products = await unified_service.search_single_platform(
                 keyword=request.keyword,
+                platform=request.platform,
                 page=request.page
             )
-            results["naver_smartstore"] = [product.dict() for product in naver_products]
+            results = {request.platform: products}
         
         return {
             "keyword": request.keyword,
             "page": request.page,
-            "results": results,
+            "platform": request.platform,
+            "results": {platform: [product.dict() for product in products] 
+                       for platform, products in results.items()},
             "total_results": sum(len(products) for products in results.values())
         }
         
@@ -351,6 +371,63 @@ async def manual_collection(
         
     except Exception as e:
         logger.error(f"수동 데이터 수집 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/platforms/supported")
+async def get_supported_platforms(
+    unified_service: UnifiedMarketplaceSearchService = Depends(get_unified_service)
+):
+    """지원하는 플랫폼 목록 조회"""
+    try:
+        platforms = unified_service.get_supported_platforms()
+        return {"platforms": platforms, "count": len(platforms)}
+        
+    except Exception as e:
+        logger.error(f"지원 플랫폼 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/platforms/status")
+async def get_platform_status(
+    unified_service: UnifiedMarketplaceSearchService = Depends(get_unified_service)
+):
+    """플랫폼 상태 확인"""
+    try:
+        status = await unified_service.get_platform_status()
+        return {"platform_status": status}
+        
+    except Exception as e:
+        logger.error(f"플랫폼 상태 확인 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/search/unified")
+async def unified_search(
+    request: ProductSearchRequest,
+    unified_service: UnifiedMarketplaceSearchService = Depends(get_unified_service)
+):
+    """통합 마켓플레이스 검색 및 가격 비교"""
+    try:
+        # 검색 실행
+        search_results = await unified_service.search_all_platforms(
+            keyword=request.keyword,
+            page=request.page
+        )
+        
+        # 가격 비교 분석
+        comparison_result = await unified_service.get_price_comparison(
+            keyword=request.keyword
+        )
+        
+        return {
+            "keyword": request.keyword,
+            "page": request.page,
+            "search_results": {platform: [product.dict() for product in products] 
+                             for platform, products in search_results.items()},
+            "price_comparison": comparison_result,
+            "total_results": sum(len(products) for products in search_results.values())
+        }
+        
+    except Exception as e:
+        logger.error(f"통합 검색 실패: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analysis/recent")
