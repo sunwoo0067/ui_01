@@ -95,7 +95,9 @@ class DatabaseService:
                 logger.info(f"데이터 업데이트 성공: {table_name}")
                 return result.data[0]
             else:
-                raise Exception("데이터 업데이트 실패")
+                logger.warning(f"데이터 업데이트 실패: {table_name}, 조건: {conditions}, 데이터: {data}")
+                # 업데이트할 레코드가 없을 수도 있으므로 None 반환
+                return None
                 
         except Exception as e:
             logger.error(f"데이터 업데이트 실패: {e}")

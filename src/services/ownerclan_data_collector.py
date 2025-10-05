@@ -123,12 +123,108 @@ class OwnerClanDataCollector:
             self.error_handler.log_error(e, f"GraphQL 요청 실패: {account_name}")
             return None
     
+    async def collect_products_batch(self, account_name: str, 
+                                   batch_size: int = 1000,
+                                   min_price: Optional[int] = None,
+                                   max_price: Optional[int] = None,
+                                   category: Optional[str] = None,
+                                   storage_service = None) -> int:
+        """상품 데이터 배치 수집 및 저장"""
+        try:
+            logger.info(f"상품 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size})")
+            
+            query = """
+            query {
+                allItems {
+                    edges {
+                        node {
+                            key
+                            name
+                            model
+                            options {
+                                price
+                                quantity
+                                optionAttributes {
+                                    name
+                                    value
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            """
+            
+            result = await self._make_graphql_request(query, account_name)
+            if not result or "data" not in result:
+                logger.error("상품 데이터 수집 실패")
+                return 0
+            
+            edges = result["data"]["allItems"]["edges"]
+            all_products = []
+            
+            # 모든 상품 데이터 수집
+            for edge in edges:
+                product = edge["node"]
+                
+                # 가격 필터링
+                if product.get("options"):
+                    first_option = product["options"][0]
+                    price = first_option.get("price", 0)
+                    
+                    if min_price and price < min_price:
+                        continue
+                    if max_price and price > max_price:
+                        continue
+                
+                # 상품 데이터 정규화
+                normalized_product = {
+                    "supplier_key": product["key"],
+                    "name": product["name"],
+                    "model": product.get("model", ""),
+                    "price": first_option.get("price", 0) if product.get("options") else 0,
+                    "stock": first_option.get("quantity", 0) if product.get("options") else 0,
+                    "options": product.get("options", []),
+                    "collected_at": datetime.utcnow().isoformat(),
+                    "account_name": account_name
+                }
+                
+                all_products.append(normalized_product)
+            
+            logger.info(f"전체 상품 데이터 수집 완료: {len(all_products)}개")
+            
+            # 배치별로 저장
+            total_saved = 0
+            for i in range(0, len(all_products), batch_size):
+                batch = all_products[i:i + batch_size]
+                batch_num = (i // batch_size) + 1
+                
+                logger.info(f"배치 {batch_num} 저장 시작: {len(batch)}개 상품")
+                
+                if storage_service:
+                    saved_count = await storage_service.save_products(batch)
+                    total_saved += saved_count
+                    logger.info(f"배치 {batch_num} 저장 완료: {saved_count}개 저장됨")
+                else:
+                    # 저장 서비스가 없으면 배치만 반환
+                    logger.info(f"배치 {batch_num} 준비 완료: {len(batch)}개 상품 (저장 서비스 없음)")
+                
+                # 배치 간 짧은 지연
+                await asyncio.sleep(0.1)
+            
+            logger.info(f"모든 배치 저장 완료: 총 {total_saved}개 상품 저장됨")
+            return total_saved
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"상품 데이터 배치 수집 실패: {account_name}")
+            return 0
+
     async def collect_products(self, account_name: str, 
                              limit: int = 1000,
                              min_price: Optional[int] = None,
                              max_price: Optional[int] = None,
                              category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """상품 데이터 수집"""
+        """상품 데이터 수집 (기존 방식 유지)"""
         try:
             logger.info(f"상품 데이터 수집 시작: {account_name}")
             
@@ -196,6 +292,150 @@ class OwnerClanDataCollector:
             self.error_handler.log_error(e, f"상품 데이터 수집 실패: {account_name}")
             return []
     
+    async def collect_orders_batch(self, account_name: str,
+                                  batch_size: int = 1000,
+                                  start_date: Optional[datetime] = None,
+                                  end_date: Optional[datetime] = None,
+                                  shipped_after: Optional[datetime] = None,
+                                  shipped_before: Optional[datetime] = None,
+                                  storage_service = None) -> int:
+        """주문 데이터 배치 수집 및 저장"""
+        try:
+            logger.info(f"주문 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size})")
+            
+            # 날짜 기본값 설정 (최대 90일 제한)
+            if not start_date:
+                start_date = datetime.now() - timedelta(days=90)
+            if not end_date:
+                end_date = datetime.now()
+            
+            # 90일 제한 확인
+            if (end_date - start_date).days > 90:
+                logger.warning("날짜 범위가 90일을 초과합니다. 90일로 제한합니다.")
+                start_date = end_date - timedelta(days=90)
+            
+            # Unix timestamp로 변환
+            date_from_timestamp = int(start_date.timestamp())
+            date_to_timestamp = int(end_date.timestamp())
+            shipped_after_timestamp = int(shipped_after.timestamp()) if shipped_after else None
+            shipped_before_timestamp = int(shipped_before.timestamp()) if shipped_before else None
+            
+            query = """
+            query AllOrders($dateFrom: Timestamp, $dateTo: Timestamp, $shippedAfter: Timestamp, $shippedBefore: Timestamp) {
+                allOrders(dateFrom: $dateFrom, dateTo: $dateTo, shippedAfter: $shippedAfter, shippedBefore: $shippedBefore) {
+                    edges {
+                        node {
+                            key
+                            id
+                            products {
+                                itemKey
+                                quantity
+                                price
+                                itemOptionInfo {
+                                    optionAttributes {
+                                        name
+                                        value
+                                    }
+                                }
+                            }
+                            status
+                            shippingInfo {
+                                sender {
+                                    name
+                                    phoneNumber
+                                }
+                                recipient {
+                                    name
+                                    phoneNumber
+                                    destinationAddress {
+                                        addr1
+                                        addr2
+                                        postalCode
+                                    }
+                                }
+                                shippingFee
+                            }
+                            createdAt
+                            updatedAt
+                            note
+                            ordererNote
+                            sellerNote
+                        }
+                    }
+                }
+               }
+               """
+               
+            variables = {
+                "dateFrom": date_from_timestamp,
+                "dateTo": date_to_timestamp,
+                "shippedAfter": shipped_after_timestamp,
+                "shippedBefore": shipped_before_timestamp
+            }
+            
+            result = await self._make_graphql_request(query, account_name, variables)
+            if not result or "data" not in result:
+                logger.error("주문 데이터 수집 실패")
+                return 0
+            
+            edges = result["data"]["allOrders"]["edges"]
+            all_orders = []
+            
+            # 모든 주문 데이터 수집
+            for edge in edges:
+                order = edge["node"]
+                
+                # 날짜 필터링
+                created_at = datetime.fromtimestamp(order.get("createdAt", 0))
+                if created_at < start_date or created_at > end_date:
+                    continue
+                
+                # 주문 데이터 정규화
+                normalized_order = {
+                    "supplier_key": order["key"],
+                    "supplier_id": order["id"],
+                    "products": order.get("products", []),
+                    "status": order.get("status", ""),
+                    "shipping_info": order.get("shippingInfo", {}),
+                    "created_at": created_at.isoformat(),
+                    "updated_at": datetime.fromtimestamp(order.get("updatedAt", 0)).isoformat(),
+                    "note": order.get("note", ""),
+                    "orderer_note": order.get("ordererNote", ""),
+                    "seller_note": order.get("sellerNote", ""),
+                    "collected_at": datetime.utcnow().isoformat(),
+                    "account_name": account_name
+                }
+                
+                all_orders.append(normalized_order)
+            
+            logger.info(f"전체 주문 데이터 수집 완료: {len(all_orders)}개")
+            
+            # 배치별로 저장
+            total_saved = 0
+            for i in range(0, len(all_orders), batch_size):
+                batch = all_orders[i:i + batch_size]
+                batch_num = (i // batch_size) + 1
+                
+                logger.info(f"배치 {batch_num} 저장 시작: {len(batch)}개 주문")
+                
+                if storage_service:
+                    saved_count = await storage_service.save_orders(batch)
+                    total_saved += saved_count
+                    logger.info(f"배치 {batch_num} 저장 완료: {saved_count}개 저장됨")
+                else:
+                    # 저장 서비스가 없으면 배치만 반환
+                    logger.info(f"배치 {batch_num} 준비 완료: {len(batch)}개 주문 (저장 서비스 없음)")
+                
+                # 배치 간 짧은 지연
+                await asyncio.sleep(0.1)
+            
+            logger.info(f"모든 배치 저장 완료: 총 {total_saved}개 주문 저장됨")
+            return total_saved
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"주문 데이터 배치 수집 실패: {account_name}")
+            return 0
+
     async def collect_orders(self, account_name: str,
                            limit: int = 100,
                            start_date: Optional[datetime] = None,

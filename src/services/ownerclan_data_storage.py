@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import json
 from typing import List, Dict, Any
 from datetime import datetime
 from loguru import logger
@@ -37,16 +38,16 @@ class OwnerClanDataStorage:
                     raw_data = {
                         "supplier_id": await self._get_supplier_id("ownerclan"),
                         "supplier_account_id": await self._get_supplier_account_id("ownerclan", product["account_name"]),
-                        "raw_data": product,
+                        "raw_data": json.dumps(product, ensure_ascii=False),
                         "collection_method": "api",
                         "collection_source": "https://api.ownerclan.com/v1/graphql",
                         "supplier_product_id": product["supplier_key"],
                         "is_processed": False,
                         "data_hash": self._calculate_hash(product),
-                        "metadata": {
+                        "metadata": json.dumps({
                             "collected_at": product["collected_at"],
                             "account_name": product["account_name"]
-                        }
+                        }, ensure_ascii=False)
                     }
                     
                     # 기존 데이터 확인
@@ -57,12 +58,18 @@ class OwnerClanDataStorage:
                     
                     if existing:
                         # 업데이트
-                        await self.db_service.update_data(
+                        update_result = await self.db_service.update_data(
                             "raw_product_data",
                             {"supplier_product_id": product["supplier_key"]},
                             raw_data
                         )
-                        logger.debug(f"원본 상품 데이터 업데이트: {product['supplier_key']}")
+                        if update_result:
+                            logger.debug(f"원본 상품 데이터 업데이트: {product['supplier_key']}")
+                        else:
+                            logger.warning(f"원본 상품 데이터 업데이트 실패 (레코드 없음): {product['supplier_key']}")
+                            # 업데이트 실패 시 새로 삽입 시도
+                            await self.db_service.insert_data("raw_product_data", raw_data)
+                            logger.debug(f"원본 상품 데이터 삽입 (업데이트 실패 후): {product['supplier_key']}")
                     else:
                         # 새로 삽입
                         await self.db_service.insert_data("raw_product_data", raw_data)
