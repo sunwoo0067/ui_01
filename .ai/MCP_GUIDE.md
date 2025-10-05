@@ -38,6 +38,24 @@ MCP는 AI 어시스턴트를 외부 도구, 데이터베이스, API와 연결하
         "${workspaceFolder}"
       ],
       "description": "File system access for the project"
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp",
+        "--api-key",
+        "${CONTEXT7_API_KEY}"
+      ],
+      "env": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+      },
+      "description": "Up-to-date documentation for libraries and frameworks"
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp",
+      "description": "Supabase database management and queries"
     }
   }
 }
@@ -125,6 +143,8 @@ claude mcp add --transport http <server-name> <url>
 ### `.env` 파일 생성
 ```bash
 # .env (Git에 포함하지 말 것!)
+CONTEXT7_API_KEY=ctx7sk-xxxxxxxxxxxx
+SUPABASE_ACCESS_TOKEN=sbp_xxxxxxxxxxxx
 GITHUB_TOKEN=ghp_xxxxxxxxxxxx
 NOTION_API_KEY=secret_xxxxxxxxxxxx
 DATABASE_URL=postgresql://user:pass@localhost/db
@@ -176,6 +196,7 @@ claude mcp remove <server-name>
 - **Jira/Confluence**: Atlassian 도구 연동
 
 ### 데이터베이스
+- **Supabase**: Supabase 프로젝트 관리 및 쿼리 (현재 프로젝트 사용 중)
 - **PostgreSQL**: PostgreSQL 쿼리
 - **SQLite**: SQLite 데이터베이스
 - **MongoDB**: MongoDB 쿼리
@@ -201,9 +222,22 @@ claude mcp remove <server-name>
 - GUI 설정 인터페이스
 - macOS/WSL에서 Claude Code로 서버 내보내기 가능
 
-### Cursor, Windsurf
-- 각 에디터의 MCP 지원 여부 확인 필요
-- `.mcp.json` 파일 공유 가능 (호환성에 따라)
+### Cursor
+- `.cursor/mcp.json` 또는 UI 설정
+- 여러 MCP 서버 동시 사용 가능
+- HTTP/SSE 서버 지원
+
+### Windsurf
+- `mcp-remote` 모듈 사용
+- Flow/Cascade 모드에서 MCP 활용
+- 원격 MCP 서버 연결 지원
+
+### Codex/Cline
+- `.mcp.json` 자동 인식
+- 강력한 MCP 통합 (도구 사용 및 컨텍스트 인식)
+- 환경 변수 `.env` 파일 사용
+
+**상세 호환성**: [EDITOR_MCP_COMPATIBILITY.md](.ai/EDITOR_MCP_COMPATIBILITY.md) 참조
 
 ## 보안 주의사항
 
@@ -224,6 +258,38 @@ claude mcp remove <server-name>
 - 민감한 정보는 항상 환경 변수로 관리
 - `.env.example` 파일로 필요한 환경 변수 명시
 
+## Supabase MCP 특화 설정
+
+### Supabase MCP 서버
+```json
+{
+  "supabase": {
+    "type": "http",
+    "url": "https://mcp.supabase.com/mcp",
+    "description": "Supabase database management and queries"
+  }
+}
+```
+
+### 주요 기능
+- 프로젝트 생성 및 관리
+- 테이블 설계 및 마이그레이션
+- SQL 쿼리 실행
+- 브랜치 관리
+- TypeScript 타입 생성
+- 로그 및 디버깅
+
+### 보안 권장사항
+1. **개발 프로젝트만 사용** - 프로덕션 데이터 노출 금지
+2. **Read-Only 모드** - 실제 데이터 접근 시 읽기 전용
+3. **프로젝트 스코프 제한** - 특정 프로젝트로만 접근 제한
+4. **도구 호출 수동 승인** - AI의 모든 작업 수동 검토
+
+### 인증
+- 최초 설정 시 브라우저 OAuth 로그인
+- Organization 선택 필요
+- Access Token은 환경 변수로 관리
+
 ## 트러블슈팅
 
 ### MCP 서버가 작동하지 않을 때
@@ -232,6 +298,12 @@ claude mcp remove <server-name>
 3. 환경 변수가 올바르게 설정되었는지 확인
 4. 필요한 npm 패키지가 설치되었는지 확인
 5. Claude Code 재시작
+
+### Supabase MCP 연결 문제
+1. OAuth 로그인 완료 확인
+2. 올바른 Organization 선택 확인
+3. 프로젝트 권한 확인
+4. Read-Only 모드 설정 확인
 
 ### 토큰 제한 경고
 - MCP 도구 출력이 10,000 토큰을 초과하면 경고 표시
@@ -244,3 +316,4 @@ claude mcp remove <server-name>
 
 ## 업데이트 이력
 - 2025-10-06: 초기 MCP 가이드 생성 [Claude Code]
+- 2025-10-06: Context7, Supabase MCP 서버 추가 및 에디터 호환성 업데이트 [Claude Code]

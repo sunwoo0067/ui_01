@@ -22,6 +22,11 @@
         "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
       },
       "description": "Up-to-date documentation for libraries and frameworks"
+    },
+    "supabase": {
+      "type": "http",
+      "url": "https://mcp.supabase.com/mcp",
+      "description": "Supabase database management and queries"
     }
   }
 }
