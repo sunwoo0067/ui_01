@@ -267,7 +267,12 @@ class ErrorHandler:
             log_level = "ERROR"
         
         # 로깅 메시지 구성
-        log_message = f"Error: {error.message}"
+        if hasattr(error, 'message'):
+            error_message = error.message
+        else:
+            error_message = str(error)
+        
+        log_message = f"Error: {error_message}"
         if context:
             log_message += f" | Context: {context}"
         

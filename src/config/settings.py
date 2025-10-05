@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = "ignore"  # 추가 환경 변수 무시
 
 
 # 전역 설정 인스턴스
