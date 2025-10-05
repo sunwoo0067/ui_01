@@ -32,6 +32,18 @@
 ## 코딩 규칙
 - 상세한 코딩 규칙은 [CODING_RULES.md](.ai/CODING_RULES.md) 참조
 
+## MCP (Model Context Protocol) 통합
+- MCP를 통해 외부 도구, 데이터베이스, API와 연동 가능
+- 상세한 MCP 설정 가이드는 [MCP_GUIDE.md](.ai/MCP_GUIDE.md) 참조
+- 프로젝트 공유 MCP 설정: `.mcp.json`
+- Claude Desktop과 MCP 서버 공유 가능
+
+### MCP 주요 기능
+- 파일 시스템 접근
+- 데이터베이스 쿼리 (PostgreSQL, SQLite 등)
+- 이슈 트래커 연동 (GitHub, Jira, Linear 등)
+- 외부 API 통합 (Notion, Slack 등)
+
 ## AI 에디터 사용 가이드
 
 ### 작업 시작 전
@@ -58,3 +70,4 @@
 
 ## 변경 이력
 - 2025-10-06: 초기 문서 생성 [Claude Code]
+- 2025-10-06: MCP (Model Context Protocol) 통합 가이드 추가 [Claude Code]

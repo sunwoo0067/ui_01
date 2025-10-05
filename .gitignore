@@ -34,3 +34,7 @@ pnpm-debug.log*
 
 # OS
 Thumbs.db
+
+# MCP (Model Context Protocol)
+.mcp.local.json
+**/secrets.json

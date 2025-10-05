@@ -1,0 +1,14 @@
+{
+  "$schema": "https://schema.claudeapis.com/mcp-schema.json",
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${workspaceFolder}"
+      ],
+      "description": "File system access for the project"
+    }
+  }
+}
