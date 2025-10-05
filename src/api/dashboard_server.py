@@ -26,6 +26,7 @@ from services.auction_search_service import AuctionSearchService
 from services.unified_marketplace_search_service import UnifiedMarketplaceSearchService
 from services.price_comparison_service import PriceComparisonService
 from services.competitor_data_scheduler import CompetitorDataScheduler
+from services.ai_price_prediction_service import AIPricePredictionService
 
 
 # FastAPI 앱 생성
@@ -62,6 +63,9 @@ def get_gmarket_service():
 
 def get_auction_service():
     return AuctionSearchService()
+
+def get_ai_prediction_service():
+    return AIPricePredictionService()
 
 def get_unified_service():
     return UnifiedMarketplaceSearchService()
@@ -428,6 +432,225 @@ async def unified_search(
         
     except Exception as e:
         logger.error(f"통합 검색 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# AI 가격 예측 관련 API 엔드포인트
+
+@app.post("/api/ai/train-models")
+async def train_ai_models(
+    category: Optional[str] = None,
+    ai_service: AIPricePredictionService = Depends(get_ai_prediction_service)
+):
+    """AI 모델 훈련"""
+    try:
+        logger.info(f"AI 모델 훈련 시작 - 카테고리: {category}")
+        
+        model_scores = await ai_service.train_models(category)
+        
+        return {
+            "status": "success",
+            "message": "모델 훈련 완료",
+            "model_scores": model_scores,
+            "trained_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"AI 모델 훈련 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ai/predict-price")
+async def predict_price(
+    product_data: Dict[str, Any],
+    ai_service: AIPricePredictionService = Depends(get_ai_prediction_service)
+):
+    """상품 가격 예측"""
+    try:
+        logger.info("가격 예측 요청")
+        
+        predictions = await ai_service.predict_price(product_data)
+        
+        return {
+            "status": "success",
+            "predictions": [
+                {
+                    "model": p.model_name,
+                    "predicted_price": p.predicted_price,
+                    "confidence": p.confidence_score,
+                    "features_used": p.features_used
+                }
+                for p in predictions
+            ],
+            "predicted_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"가격 예측 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/ai/pricing-strategy")
+async def get_pricing_strategy(
+    product_data: Dict[str, Any],
+    ai_service: AIPricePredictionService = Depends(get_ai_prediction_service)
+):
+    """최적 가격 전략 제안"""
+    try:
+        logger.info("가격 전략 분석 요청")
+        
+        strategy_result = await ai_service.get_optimal_pricing_strategy(product_data)
+        
+        return {
+            "status": "success",
+            "strategy": strategy_result,
+            "analyzed_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"가격 전략 분석 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/market-trend")
+async def get_market_trend(
+    category: Optional[str] = None,
+    ai_service: AIPricePredictionService = Depends(get_ai_prediction_service)
+):
+    """시장 트렌드 분석"""
+    try:
+        logger.info(f"시장 트렌드 분석 요청 - 카테고리: {category}")
+        
+        market_trend = await ai_service.analyze_market_trend(category)
+        
+        return {
+            "status": "success",
+            "market_trend": {
+                "trend_direction": market_trend.trend_direction,
+                "trend_strength": market_trend.trend_strength,
+                "volatility": market_trend.volatility,
+                "seasonal_pattern": market_trend.seasonal_pattern,
+                "competitor_count": market_trend.competitor_count,
+                "price_range": {
+                    "min": market_trend.price_range[0],
+                    "max": market_trend.price_range[1]
+                }
+            },
+            "analyzed_at": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"시장 트렌드 분석 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/predictions/history")
+async def get_prediction_history(
+    product_id: Optional[str] = None,
+    limit: int = 50,
+    db_service: DatabaseService = Depends(get_db_service)
+):
+    """가격 예측 히스토리 조회"""
+    try:
+        filters = {"product_id": product_id} if product_id else {}
+        
+        predictions = await db_service.select_data(
+            "price_predictions",
+            filters,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "predictions": predictions,
+            "count": len(predictions)
+        }
+        
+    except Exception as e:
+        logger.error(f"예측 히스토리 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/model-performance")
+async def get_model_performance(
+    model_name: Optional[str] = None,
+    category: Optional[str] = None,
+    limit: int = 20,
+    db_service: DatabaseService = Depends(get_db_service)
+):
+    """모델 성능 조회"""
+    try:
+        filters = {}
+        if model_name:
+            filters["model_name"] = model_name
+        if category:
+            filters["category"] = category
+        
+        performance_data = await db_service.select_data(
+            "model_performance",
+            filters,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "performance": performance_data,
+            "count": len(performance_data)
+        }
+        
+    except Exception as e:
+        logger.error(f"모델 성능 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/feature-importance")
+async def get_feature_importance(
+    model_name: Optional[str] = None,
+    ai_service: AIPricePredictionService = Depends(get_ai_prediction_service)
+):
+    """특성 중요도 조회"""
+    try:
+        if not ai_service.feature_importance:
+            return {
+                "status": "warning",
+                "message": "특성 중요도 데이터가 없습니다. 모델을 먼저 훈련해주세요.",
+                "feature_importance": {}
+            }
+        
+        if model_name and model_name in ai_service.feature_importance:
+            feature_importance = {model_name: ai_service.feature_importance[model_name]}
+        else:
+            feature_importance = ai_service.feature_importance
+        
+        return {
+            "status": "success",
+            "feature_importance": feature_importance
+        }
+        
+    except Exception as e:
+        logger.error(f"특성 중요도 조회 실패: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/ai/status")
+async def get_ai_status(
+    ai_service: AIPricePredictionService = Depends(get_ai_prediction_service)
+):
+    """AI 시스템 상태 확인"""
+    try:
+        # 모델 상태 확인
+        model_status = {}
+        for model_name, model in ai_service.models.items():
+            model_status[model_name] = {
+                "trained": hasattr(model, 'feature_importances_') if hasattr(model, 'feature_importances_') else False,
+                "has_scaler": model_name in ai_service.scalers,
+                "has_encoder": model_name in ai_service.label_encoders
+            }
+        
+        return {
+            "status": "success",
+            "ai_system_status": {
+                "models": model_status,
+                "feature_importance_available": len(ai_service.feature_importance) > 0,
+                "total_models": len(ai_service.models),
+                "trained_models": sum(1 for status in model_status.values() if status["trained"])
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"AI 상태 확인 실패: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/analysis/recent")
