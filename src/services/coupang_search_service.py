@@ -15,6 +15,7 @@ from bs4 import BeautifulSoup
 from src.config.settings import settings
 from src.utils.error_handler import ErrorHandler, BaseAPIError, DatabaseError
 from src.services.database_service import DatabaseService
+from src.services.advanced_web_scraper import AdvancedWebScraper
 
 
 class CoupangProduct:
@@ -43,19 +44,13 @@ class CoupangSearchService:
         self.settings = settings
         self.error_handler = ErrorHandler()
         self.db_service = DatabaseService()
+        self.scraper = AdvancedWebScraper()
         
         # 쿠팡 검색 URL
         self.search_base_url = "https://www.coupang.com/np/search"
         
-        # 헤더 설정 (봇 차단 방지)
-        self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'ko-KR,ko;q=0.8,en-US;q=0.5,en;q=0.3',
-            'Accept-Encoding': 'gzip, deflate',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-        }
+        # 딜레이 설정 (봇 차단 방지)
+        self.scraper.set_delay_range(2.0, 5.0)
         
         # 테이블명
         self.competitor_products_table = "competitor_products"
@@ -98,17 +93,15 @@ class CoupangSearchService:
             # URL 구성
             url = f"{self.search_base_url}?" + "&".join([f"{k}={quote(str(v))}" for k, v in params.items()])
             
-            # HTTP 요청
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.get(url) as response:
-                    if response.status == 200:
-                        html = await response.text()
-                        products = await self._parse_search_results(html, keyword)
-                        logger.info(f"쿠팡 상품 검색 완료: {len(products)}개 상품")
-                        return products
-                    else:
-                        logger.error(f"쿠팡 검색 요청 실패: {response.status}")
-                        return []
+            # 고급 웹 스크래핑으로 요청
+            html = await self.scraper.get_page_content(url)
+            if html:
+                products = await self._parse_search_results(html, keyword)
+                logger.info(f"쿠팡 상품 검색 완료: {len(products)}개 상품")
+                return products
+            else:
+                logger.error(f"쿠팡 검색 요청 실패")
+                return []
                         
         except Exception as e:
             self.error_handler.log_error(e, {
@@ -131,16 +124,14 @@ class CoupangSearchService:
         try:
             logger.info(f"쿠팡 상품 상세 정보 조회: {product_url}")
             
-            async with aiohttp.ClientSession(headers=self.headers) as session:
-                async with session.get(product_url) as response:
-                    if response.status == 200:
-                        html = await response.text()
-                        details = await self._parse_product_details(html)
-                        logger.info(f"쿠팡 상품 상세 정보 조회 완료")
-                        return details
-                    else:
-                        logger.error(f"쿠팡 상품 상세 조회 실패: {response.status}")
-                        return None
+            html = await self.scraper.get_page_content(product_url)
+            if html:
+                details = await self._parse_product_details(html)
+                logger.info(f"쿠팡 상품 상세 정보 조회 완료")
+                return details
+            else:
+                logger.error(f"쿠팡 상품 상세 조회 실패")
+                return None
                         
         except Exception as e:
             self.error_handler.log_error(e, {

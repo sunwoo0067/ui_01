@@ -19,6 +19,8 @@ python-magic>=0.4.27
 # Web scraping
 beautifulsoup4>=4.12.0
 requests>=2.31.0
+fake-useragent>=1.4.0
+schedule>=1.2.0
 
 # Progress tracking
 tqdm>=4.66.0
