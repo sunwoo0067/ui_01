@@ -156,26 +156,29 @@ class ZentradeConnector(APIConnector):
             Dict: 변환된 상품 데이터
         """
         try:
+            # raw_product가 문자열인 경우 JSON 파싱
+            if isinstance(raw_product, str):
+                import json
+                raw_product = json.loads(raw_product)
+            
             # 젠트레이드 API 응답 형식에 맞춰 변환
             transformed = {
-                'supplier_product_id': str(raw_product.get('product_id', '')),
-                'title': raw_product.get('product_name', ''),
-                'description': raw_product.get('description', ''),
-                'price': float(raw_product.get('retail_price', 0)),
-                'cost_price': float(raw_product.get('supply_price', 0)),
+                'supplier_product_id': str(raw_product.get('supplier_key', '')),
+                'title': raw_product.get('title', '').strip(),
+                'description': raw_product.get('content', ''),
+                'price': float(raw_product.get('price', 0)),
+                'cost_price': float(raw_product.get('price', 0)) * 0.8,  # 예상 원가
                 'currency': 'KRW',
-                'category': raw_product.get('category_name', ''),
-                'brand': raw_product.get('brand_name', ''),
-                'stock_quantity': int(raw_product.get('stock_quantity', 0)),
-                'status': 'active' if raw_product.get('is_available', False) else 'inactive',
-                'images': [img['url'] for img in raw_product.get('images', [])],
+                'category': raw_product.get('category', '').strip(),
+                'brand': raw_product.get('brand', ''),
+                'stock_quantity': int(raw_product.get('runout', 0)),
+                'status': 'active',
+                'images': raw_product.get('images', []),
                 'attributes': {
-                    'model': raw_product.get('model_number'),
-                    'manufacturer': raw_product.get('manufacturer'),
-                    'origin': raw_product.get('origin_country'),
-                    'specifications': raw_product.get('specifications', {})
-                },
-                'metadata': {
+                    'model': raw_product.get('model', ''),
+                    'keywords': raw_product.get('keywords', ''),
+                    'tax_mode': raw_product.get('tax_mode', ''),
+                    'opendate': raw_product.get('opendate', ''),
                     'supplier': 'zentrade',
                     'updated_at': raw_product.get('updated_date'),
                     'product_code': raw_product.get('product_code'),

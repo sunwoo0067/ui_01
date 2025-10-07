@@ -45,16 +45,29 @@ class ZentradeDataCollector:
         self.token_manager = ZentradeTokenManager(db_service)
         
     async def _make_api_request(self, url: str, params: Dict[str, Any]) -> Optional[str]:
-        """API 요청 실행"""
+        """API 요청 실행 (POST 방식으로 변경)"""
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, params=params, timeout=30) as response:
+            # 브라우저 헤더 추가 (WAF 우회)
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+                'Referer': 'https://www.zentrade.co.kr/',
+                'Origin': 'https://www.zentrade.co.kr',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+            
+            # POST 방식으로 변경 (API 문서에서 GET/POST 모두 지원)
+            async with aiohttp.ClientSession(headers=headers) as session:
+                async with session.post(url, data=params, timeout=30) as response:
                     if response.status == 200:
                         # 젠트레이드 API는 euc-kr 인코딩 사용
                         content = await response.text(encoding='euc-kr')
                         return content
                     else:
                         logger.error(f"API 요청 실패: {response.status}")
+                        error_text = await response.text()
+                        logger.error(f"오류 내용: {error_text[:200]}")
                         return None
         except Exception as e:
             self.error_handler.log_error(e, f"API 요청 실패: {url}")

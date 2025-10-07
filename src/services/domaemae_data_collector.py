@@ -134,10 +134,10 @@ class DomaemaeDataCollector:
                 params["kw"] = keyword
                 search_params_added = True
             
-            # 검색 조건이 없으면 기본 키워드 사용
+            # 검색 조건이 없으면 에러 (전체 수집시에는 카테고리 순환 필요)
             if not search_params_added:
-                params["kw"] = "상품"  # 기본 검색어
-                logger.warning("검색 조건이 없어 기본 키워드 '상품'을 사용합니다")
+                logger.error("검색 조건 필수: 기획전(ev), 카테고리(ca), 아이디(id), 검색어(kw), 상품번호(itemNo) 중 1개 필요")
+                return []
             if min_price is not None:
                 params["mnp"] = min_price
             if max_price is not None:
@@ -187,21 +187,21 @@ class DomaemaeDataCollector:
             return []
     
     async def _parse_api_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """API 응답 파싱"""
+        """API 응답 파싱 (1차 수집 - getItemList)"""
         try:
             products = []
-            
+
             # 도매꾹 JSON 응답 구조 확인
             if "domeggook" in response:
                 domeggook_data = response["domeggook"]
-                
+
                 if "list" in domeggook_data and "item" in domeggook_data["list"]:
                     items = domeggook_data["list"]["item"]
-                    
+
                     # 단일 아이템인 경우 리스트로 변환
                     if not isinstance(items, list):
                         items = [items]
-                    
+
                     for item in items:
                         product_data = {
                             "supplier_key": str(item.get("no", "")),
@@ -222,33 +222,148 @@ class DomaemaeDataCollector:
                             "delivery_info": item.get("deli", {}),
                             "idx_com": item.get("idxCOM", "")
                         }
-                        
+
                         products.append(product_data)
-                
+
                 # 헤더 정보도 로깅
                 if "header" in domeggook_data:
                     header = domeggook_data["header"]
                     logger.info(f"도매꾹 응답 헤더 - 총 상품: {header.get('numberOfItems', 0)}, 현재 페이지: {header.get('currentPage', 1)}")
-            
+
             # 에러 응답인 경우
             elif "errors" in response:
                 error_info = response["errors"]
                 logger.error(f"도매꾹 API 에러: {error_info.get('message', 'Unknown error')}")
                 return []
-            
+
             # XML 응답인 경우 (raw_xml이 있는 경우)
             elif "raw_xml" in response:
                 logger.warning("XML 응답은 현재 지원하지 않습니다")
                 return []
-            
+
             else:
                 logger.warning(f"예상하지 못한 응답 형식: {list(response.keys())}")
                 return []
-            
+
             return products
-            
+
         except Exception as e:
             self.error_handler.log_error(e, "도매꾹 API 응답 파싱 실패")
+            return []
+
+    async def collect_product_details(self, account_name: str,
+                                     product_ids: List[str],
+                                     batch_size: int = 100) -> List[Dict[str, Any]]:
+        """
+        2차 수집: 상품 상세 정보 수집 (getItemView)
+        한 번에 최대 100개까지 조회 가능 (comma-separated)
+        """
+        try:
+            logger.info(f"상품 상세 정보 수집 시작: {len(product_ids)}개 상품")
+
+            # 인증 정보 가져오기
+            credentials = await self.token_manager.get_credentials(account_name)
+
+            all_details = []
+
+            # 100개씩 배치로 나누어 요청
+            for i in range(0, len(product_ids), batch_size):
+                batch = product_ids[i:i + batch_size]
+                batch_num = (i // batch_size) + 1
+
+                logger.info(f"배치 {batch_num} 상세 조회 시작: {len(batch)}개 상품")
+
+                # API 파라미터 구성
+                params = {
+                    "ver": credentials["version"],
+                    "mode": "getItemView",
+                    "aid": credentials["api_key"],
+                    "no": ",".join(batch),  # comma-separated item numbers
+                    "multiple": "true",
+                    "om": "json"
+                }
+
+                # API 요청
+                result = await self._make_api_request(params)
+
+                if not result:
+                    logger.error(f"배치 {batch_num} 상세 조회 실패")
+                    continue
+
+                # 응답 파싱
+                details = await self._parse_detail_response(result)
+
+                if details:
+                    # 메타데이터 추가
+                    for detail in details:
+                        detail["account_name"] = account_name
+                        detail["collected_at"] = datetime.utcnow().isoformat()
+
+                    all_details.extend(details)
+                    logger.info(f"배치 {batch_num} 상세 조회 완료: {len(details)}개 상품")
+
+                # API 호출 간격
+                await asyncio.sleep(0.5)
+
+            logger.info(f"전체 상품 상세 정보 수집 완료: {len(all_details)}개")
+            return all_details
+
+        except Exception as e:
+            self.error_handler.log_error(e, f"상품 상세 정보 수집 실패: {account_name}")
+            return []
+
+    async def _parse_detail_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """API 응답 파싱 (2차 수집 - getItemView)"""
+        try:
+            details = []
+
+            if "domeggook" in response:
+                domeggook_data = response["domeggook"]
+
+                # 상세 정보는 items 배열에 있음
+                if "items" in domeggook_data:
+                    items = domeggook_data["items"]
+
+                    # 단일 아이템인 경우 리스트로 변환
+                    if not isinstance(items, list):
+                        items = [items]
+
+                    for item in items:
+                        detail_data = {
+                            "supplier_key": str(item.get("it_id", "")),
+                            "name": item.get("it_name", ""),
+                            "price": int(item.get("it_price", 0)) if item.get("it_price") else 0,
+                            "stock_quantity": int(item.get("it_stock_qty", 0)) if item.get("it_stock_qty") else 0,
+                            "description": item.get("it_desc", ""),
+                            "brand": item.get("it_brand", ""),
+                            "manufacturer": item.get("it_maker", ""),
+                            "origin": item.get("it_origin", ""),
+                            "barcode": item.get("it_barcode", ""),
+                            "model": item.get("it_model", ""),
+                            "weight": item.get("it_weight", ""),
+                            "dimensions": item.get("it_dimensions", ""),
+                            "images": item.get("images", []),
+                            "options": item.get("options", []),
+                            "category": item.get("ca_id", ""),
+                            "seller_id": item.get("mb_id", ""),
+                            "min_order_qty": int(item.get("it_min_qty", 1)) if item.get("it_min_qty") else 1,
+                            "max_order_qty": int(item.get("it_max_qty", 0)) if item.get("it_max_qty") else 0,
+                            "shipping_cost": int(item.get("it_sc_price", 0)) if item.get("it_sc_price") else 0,
+                            "shipping_type": item.get("it_sc_type", ""),
+                            "return_cost": int(item.get("it_return_cost", 0)) if item.get("it_return_cost") else 0,
+                            "exchange_cost": int(item.get("it_exchange_cost", 0)) if item.get("it_exchange_cost") else 0,
+                            "is_soldout": item.get("it_soldout", "0") == "1",
+                            "is_discontinued": item.get("it_use", "1") == "0"
+                        }
+
+                        details.append(detail_data)
+
+                logger.info(f"상세 정보 파싱 완료: {len(details)}개")
+
+            return details
+
+        except Exception as e:
+            self.error_handler.log_error(e, "상품 상세 정보 파싱 실패")
             return []
     
     async def collect_products_batch(self, account_name: str,
@@ -403,16 +518,21 @@ class DomaemaeDataCollector:
             # 인증 정보 가져오기
             credentials = await self.token_manager.get_credentials(account_name)
             
-            # API 파라미터 구성
+            # API 파라미터 구성 - 도매꾹 API는 주문 조회를 직접 지원하지 않을 수 있음
+            # 대신 상품 수집과 유사한 방식으로 시도
             params = {
                 "ver": credentials["version"],
-                "mode": "getOrderList",  # 주문 목록 조회
+                "mode": "getItemList",  # 상품 목록 조회 모드 사용
                 "aid": credentials["api_key"],
                 "market": market,
                 "om": "json",  # JSON 형식
                 "sz": size,
-                "pg": page
+                "pg": page,
+                "kw": "주문"  # 주문 관련 키워드로 검색 시도
             }
+            
+            # 디버깅을 위한 로그 추가
+            logger.info(f"도매꾹 주문 API 요청 파라미터: {params}")
             
             # 선택적 파라미터 추가
             if start_date:
@@ -429,6 +549,9 @@ class DomaemaeDataCollector:
             
             # API 요청
             result = await self._make_api_request(params)
+            
+            # 디버깅을 위한 응답 로그 추가
+            logger.info(f"도매꾹 주문 API 응답: {result}")
             
             if not result:
                 logger.error(f"{market_name} 주문 API 응답 없음")

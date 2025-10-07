@@ -43,7 +43,7 @@ class ProductPipeline:
 
         # 3. 커넥터로 변환
         connector = self._create_connector(supplier)
-        normalized_data = connector.transform_product(raw_data_record["raw_data"])
+        normalized_data = await connector.transform_product(raw_data_record["raw_data"])
 
         # 4. 정규화된 상품 저장
         normalized_product_id = await self._save_normalized_product(
@@ -104,15 +104,33 @@ class ProductPipeline:
         return response.data[0] if response.data else None
 
     async def _get_supplier(self, supplier_id: UUID) -> Dict:
-        """공급사 조회"""
-        response = (
+        """공급사 조회 (계정 정보 포함)"""
+        # 공급사 기본 정보 조회
+        supplier_response = (
             supabase_client.get_table("suppliers")
             .select("*")
             .eq("id", str(supplier_id))
             .execute()
         )
-
-        return response.data[0]
+        
+        supplier = supplier_response.data[0]
+        
+        # 계정 정보 조회
+        account_response = (
+            supabase_client.get_table("supplier_accounts")
+            .select("account_credentials")
+            .eq("supplier_id", str(supplier_id))
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        
+        if account_response.data:
+            import json
+            credentials = json.loads(account_response.data[0]["account_credentials"])
+            supplier["credentials"] = credentials
+        
+        return supplier
 
     def _create_connector(self, supplier: Dict):
         """커넥터 생성"""

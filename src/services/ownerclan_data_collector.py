@@ -123,98 +123,135 @@ class OwnerClanDataCollector:
             self.error_handler.log_error(e, f"GraphQL 요청 실패: {account_name}")
             return None
     
-    async def collect_products_batch(self, account_name: str, 
+    async def collect_products_batch(self, account_name: str,
                                    batch_size: int = 1000,
                                    min_price: Optional[int] = None,
                                    max_price: Optional[int] = None,
                                    category: Optional[str] = None,
+                                   search: Optional[str] = None,
                                    storage_service = None) -> int:
-        """상품 데이터 배치 수집 및 저장"""
+        """
+        상품 데이터 배치 수집 및 저장 (Pagination 지원)
+        오너클랜 API는 한 번에 최대 1000개까지 조회 가능하며 cursor 기반 pagination을 지원합니다.
+        """
         try:
             logger.info(f"상품 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size})")
-            
-            query = """
-            query {
-                allItems {
-                    edges {
-                        node {
-                            key
-                            name
-                            model
-                            options {
+
+            all_products = []
+            cursor = None
+            page_count = 0
+
+            while True:
+                page_count += 1
+                logger.info(f"페이지 {page_count} 수집 시작 (cursor: {cursor})")
+
+                # GraphQL 쿼리 (pagination 지원)
+                query = """
+                query AllItems($first: Int, $after: String, $minPrice: Int, $maxPrice: Int, $search: String) {
+                    allItems(first: $first, after: $after, minPrice: $minPrice, maxPrice: $maxPrice, search: $search) {
+                        pageInfo {
+                            hasNextPage
+                            endCursor
+                        }
+                        edges {
+                            node {
+                                key
+                                name
+                                model
                                 price
-                                quantity
-                                optionAttributes {
-                                    name
-                                    value
+                                status
+                                options {
+                                    price
+                                    quantity
+                                    optionAttributes {
+                                        name
+                                        value
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            """
-            
-            result = await self._make_graphql_request(query, account_name)
-            if not result or "data" not in result:
-                logger.error("상품 데이터 수집 실패")
-                return 0
-            
-            edges = result["data"]["allItems"]["edges"]
-            all_products = []
-            
-            # 모든 상품 데이터 수집
-            for edge in edges:
-                product = edge["node"]
-                
-                # 가격 필터링
-                if product.get("options"):
-                    first_option = product["options"][0]
-                    price = first_option.get("price", 0)
-                    
-                    if min_price and price < min_price:
-                        continue
-                    if max_price and price > max_price:
-                        continue
-                
-                # 상품 데이터 정규화
-                normalized_product = {
-                    "supplier_key": product["key"],
-                    "name": product["name"],
-                    "model": product.get("model", ""),
-                    "price": first_option.get("price", 0) if product.get("options") else 0,
-                    "stock": first_option.get("quantity", 0) if product.get("options") else 0,
-                    "options": product.get("options", []),
-                    "collected_at": datetime.utcnow().isoformat(),
-                    "account_name": account_name
+                """
+
+                variables = {
+                    "first": batch_size,
+                    "after": cursor,
+                    "minPrice": min_price,
+                    "maxPrice": max_price,
+                    "search": search
                 }
-                
-                all_products.append(normalized_product)
-            
-            logger.info(f"전체 상품 데이터 수집 완료: {len(all_products)}개")
-            
-            # 배치별로 저장
-            total_saved = 0
-            for i in range(0, len(all_products), batch_size):
-                batch = all_products[i:i + batch_size]
-                batch_num = (i // batch_size) + 1
-                
-                logger.info(f"배치 {batch_num} 저장 시작: {len(batch)}개 상품")
-                
-                if storage_service:
+
+                result = await self._make_graphql_request(query, account_name, variables)
+                if not result or "data" not in result:
+                    logger.error(f"상품 데이터 수집 실패 (페이지 {page_count})")
+                    break
+
+                all_items_data = result["data"]["allItems"]
+                edges = all_items_data.get("edges", [])
+                page_info = all_items_data.get("pageInfo", {})
+
+                if not edges:
+                    logger.info(f"페이지 {page_count}: 수집할 데이터 없음")
+                    break
+
+                logger.info(f"페이지 {page_count}: {len(edges)}개 상품 수집")
+
+                # 상품 데이터 정규화
+                for edge in edges:
+                    product = edge["node"]
+
+                    # 상품 데이터 정규화
+                    normalized_product = {
+                        "supplier_key": product["key"],
+                        "name": product["name"],
+                        "model": product.get("model", ""),
+                        "price": product.get("price", 0),
+                        "status": product.get("status", ""),
+                        "options": product.get("options", []),
+                        "collected_at": datetime.utcnow().isoformat(),
+                        "account_name": account_name
+                    }
+
+                    all_products.append(normalized_product)
+
+                # 다음 페이지 확인
+                has_next_page = page_info.get("hasNextPage", False)
+                cursor = page_info.get("endCursor")
+
+                logger.info(f"페이지 {page_count} 완료: 누적 {len(all_products)}개, 다음 페이지: {has_next_page}")
+
+                if not has_next_page:
+                    break
+
+                # API 호출 간격
+                await asyncio.sleep(0.5)
+
+            logger.info(f"전체 상품 데이터 수집 완료: {len(all_products)}개 ({page_count}페이지)")
+
+            # 저장 서비스가 있으면 저장
+            if storage_service:
+                # 배치별로 저장
+                total_saved = 0
+                save_batch_size = 1000
+
+                for i in range(0, len(all_products), save_batch_size):
+                    batch = all_products[i:i + save_batch_size]
+                    batch_num = (i // save_batch_size) + 1
+
+                    logger.info(f"저장 배치 {batch_num}: {len(batch)}개 상품 저장 중...")
                     saved_count = await storage_service.save_products(batch)
                     total_saved += saved_count
-                    logger.info(f"배치 {batch_num} 저장 완료: {saved_count}개 저장됨")
-                else:
-                    # 저장 서비스가 없으면 배치만 반환
-                    logger.info(f"배치 {batch_num} 준비 완료: {len(batch)}개 상품 (저장 서비스 없음)")
-                
-                # 배치 간 짧은 지연
-                await asyncio.sleep(0.1)
-            
-            logger.info(f"모든 배치 저장 완료: 총 {total_saved}개 상품 저장됨")
-            return total_saved
-            
+                    logger.info(f"저장 배치 {batch_num} 완료: {saved_count}개 저장됨")
+
+                    await asyncio.sleep(0.1)
+
+                logger.info(f"모든 배치 저장 완료: 총 {total_saved}개 상품 저장됨")
+                return total_saved
+            else:
+                logger.info(f"수집만 완료 (저장 서비스 없음): {len(all_products)}개")
+                return len(all_products)
+
         except Exception as e:
             self.error_handler.log_error(e, f"상품 데이터 배치 수집 실패: {account_name}")
             return 0

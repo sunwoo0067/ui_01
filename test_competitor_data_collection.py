@@ -38,11 +38,11 @@ class CompetitorDataCollectionTester:
             
             test_keyword = self.test_keywords[0]
             
-                    # 상품 검색
-                    products = await self.coupang_service.search_products(
-                        keyword=test_keyword,
-                        page=1
-                    )
+            # 상품 검색
+            products = await self.coupang_service.search_products(
+                keyword=test_keyword,
+                page=1
+            )
             
             if products:
                 logger.info(f"✅ 쿠팡 상품 검색 성공: {len(products)}개 상품")
@@ -81,11 +81,11 @@ class CompetitorDataCollectionTester:
             
             test_keyword = self.test_keywords[1]
             
-                    # 상품 검색
-                    products = await self.naver_service.search_products(
-                        keyword=test_keyword,
-                        page=1
-                    )
+            # 상품 검색
+            products = await self.naver_service.search_products(
+                keyword=test_keyword,
+                page=1
+            )
             
             if products:
                 logger.info(f"✅ 네이버 스마트스토어 상품 검색 성공: {len(products)}개 상품")

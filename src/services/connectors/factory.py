@@ -11,6 +11,9 @@ from .base import SupplierConnector, CollectionMethod
 from .examples.naver_smartstore import NaverSmartstoreConnector
 from .examples.excel_generic import GenericExcelConnector
 from .examples.web_generic import GenericWebCrawler
+from .examples.zentrade import ZentradeConnector
+from .examples.ownerclan import OwnerClanConnector
+from .examples.domaemae import DomaeMaeConnector
 
 
 class ConnectorFactory:
@@ -21,6 +24,10 @@ class ConnectorFactory:
         "naver_smartstore": NaverSmartstoreConnector,
         "excel_supplier": GenericExcelConnector,
         "taobao": GenericWebCrawler,
+        "zentrade": ZentradeConnector,
+        "ownerclan": OwnerClanConnector,
+        "domaemae_dome": DomaeMaeConnector,
+        "domaemae": DomaeMaeConnector,
         # 여기에 새 공급사 추가
     }
 
