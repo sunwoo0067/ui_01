@@ -153,31 +153,37 @@ class OwnerClanConnector(APIConnector):
             Dict: 변환된 상품 데이터
         """
         try:
-            # 오너클랜 API 응답 형식에 맞춰 변환
+            # 실제 수집된 오너클랜 데이터 구조에 맞춰 변환
+            # 필드명: supplier_key, name, price, status, category_name, etc.
+            
+            # 가격 계산 (옵션이 있으면 첫 번째 옵션 가격 사용)
+            price = float(raw_product.get('price', 0))
+            options = raw_product.get('options', [])
+            if options and len(options) > 0:
+                option_price = options[0].get('price', price)
+                price = float(option_price)
+            
             transformed = {
-                'supplier_product_id': str(raw_product.get('id', '')),
+                'supplier_product_id': str(raw_product.get('supplier_key', '')),
                 'title': raw_product.get('name', ''),
-                'description': raw_product.get('description', ''),
-                'price': float(raw_product.get('price', 0)),
-                'cost_price': float(raw_product.get('wholesale_price', 0)),
+                'description': raw_product.get('model', ''),  # model을 description으로
+                'price': price,
+                'cost_price': price,  # 도매가 = 판매가 (오너클랜 특성)
                 'currency': 'KRW',
-                'category': raw_product.get('category', ''),
-                'brand': raw_product.get('brand', ''),
-                'stock_quantity': int(raw_product.get('stock', 0)),
-                'status': 'active' if raw_product.get('available', False) else 'inactive',
+                'category': raw_product.get('category_name', ''),
+                'brand': '',  # 오너클랜 데이터에 브랜드 정보 없음
+                'stock_quantity': 9999,  # 기본 재고 (실제 재고 정보 없음)
+                'status': 'active' if raw_product.get('status') == 'available' else 'inactive',
                 'images': raw_product.get('images', []),
                 'attributes': {
-                    'color': raw_product.get('color'),
-                    'size': raw_product.get('size'),
-                    'material': raw_product.get('material'),
-                    'weight': raw_product.get('weight'),
-                    'dimensions': raw_product.get('dimensions')
-                },
-                'metadata': {
-                    'supplier': 'ownerclan',
+                    'supplier_key': raw_product.get('supplier_key'),
+                    'model': raw_product.get('model'),
+                    'category_key': raw_product.get('category_key'),
+                    'box_quantity': raw_product.get('box_quantity'),
+                    'options': options,
+                    'created_at': raw_product.get('created_at'),
                     'updated_at': raw_product.get('updated_at'),
-                    'sku': raw_product.get('sku'),
-                    'barcode': raw_product.get('barcode')
+                    'account_name': raw_product.get('account_name')
                 }
             }
             
@@ -185,6 +191,7 @@ class OwnerClanConnector(APIConnector):
             
         except Exception as e:
             logger.error(f"오너클랜 상품 변환 오류: {e}")
+            logger.error(f"문제 데이터: {raw_product}")
             raise
 
     async def _make_api_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:

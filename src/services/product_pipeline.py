@@ -43,7 +43,14 @@ class ProductPipeline:
 
         # 3. 커넥터로 변환
         connector = self._create_connector(supplier)
-        normalized_data = await connector.transform_product(raw_data_record["raw_data"])
+        
+        # raw_data가 JSON 문자열인 경우 파싱
+        raw_data = raw_data_record["raw_data"]
+        if isinstance(raw_data, str):
+            import json
+            raw_data = json.loads(raw_data)
+        
+        normalized_data = await connector.transform_product(raw_data)
 
         # 4. 정규화된 상품 저장
         normalized_product_id = await self._save_normalized_product(
@@ -127,7 +134,14 @@ class ProductPipeline:
         
         if account_response.data:
             import json
-            credentials = json.loads(account_response.data[0]["account_credentials"])
+            account_credentials = account_response.data[0]["account_credentials"]
+            
+            # account_credentials가 이미 dict면 그대로 사용, 문자열이면 파싱
+            if isinstance(account_credentials, str):
+                credentials = json.loads(account_credentials)
+            else:
+                credentials = account_credentials
+            
             supplier["credentials"] = credentials
         
         return supplier

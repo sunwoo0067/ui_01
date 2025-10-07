@@ -162,30 +162,53 @@ class DomaeMaeConnector(APIConnector):
             Dict: 변환된 상품 데이터
         """
         try:
-            # 도매매 API 응답 형식에 맞춰 변환
+            # 실제 수집된 도매매/도매꾹 데이터 구조에 맞춰 변환
+            # 필드명: supplier_key, title, price, seller_id, thumbnail_url, etc.
+            
+            # 이미지 처리
+            thumbnail = raw_product.get('thumbnail_url', '')
+            images = [thumbnail] if thumbnail else []
+            
+            # 가격 처리
+            price = float(raw_product.get('price', 0))
+            dome_price_str = raw_product.get('dome_price', '')
+            if dome_price_str:
+                # 도매꾹 가격은 문자열로 오는 경우가 있음 (예: "7,300원")
+                dome_price_str = dome_price_str.replace(',', '').replace('원', '').strip()
+                if dome_price_str.isdigit():
+                    price = float(dome_price_str)
+            
             transformed = {
-                'supplier_product_id': str(raw_product.get('goods_no', '')),
-                'title': raw_product.get('goods_name', ''),
-                'description': raw_product.get('goods_desc', ''),
-                'price': float(raw_product.get('sale_price', 0)),
-                'cost_price': float(raw_product.get('supply_price', 0)),
+                'supplier_product_id': str(raw_product.get('supplier_key', '')),
+                'title': raw_product.get('title', ''),
+                'description': f"판매처: {raw_product.get('seller_id', '')}",
+                'price': price,
+                'cost_price': price,  # 도매가 = 판매가
                 'currency': 'KRW',
-                'category': raw_product.get('category_name', ''),
-                'brand': raw_product.get('brand', ''),
-                'stock_quantity': int(raw_product.get('stock_qty', 0)),
-                'status': 'active' if raw_product.get('sale_status') == 'Y' else 'inactive',
-                'images': self._parse_images(raw_product.get('image_url', '')),
+                'category': raw_product.get('market_name', ''),
+                'brand': raw_product.get('seller_nick', ''),
+                'stock_quantity': 9999,  # 기본 재고 (실제 재고 정보 없음)
+                'status': 'active',  # 수집된 상품은 모두 active
+                'images': images,
                 'attributes': {
-                    'options': raw_product.get('options', []),
-                    'delivery_fee': raw_product.get('delivery_fee', 0),
-                    'delivery_type': raw_product.get('delivery_type'),
-                    'min_order_qty': raw_product.get('min_order_qty', 1)
-                },
-                'metadata': {
-                    'supplier': 'domaemae',
-                    'updated_at': raw_product.get('update_dt'),
-                    'goods_code': raw_product.get('goods_code'),
-                    'seller_code': raw_product.get('seller_code')
+                    'supplier_key': raw_product.get('supplier_key'),
+                    'unit_quantity': raw_product.get('unit_quantity'),
+                    'seller_id': raw_product.get('seller_id'),
+                    'seller_nick': raw_product.get('seller_nick'),
+                    'product_url': raw_product.get('product_url'),
+                    'company_only': raw_product.get('company_only'),
+                    'adult_only': raw_product.get('adult_only'),
+                    'lowest_price': raw_product.get('lowest_price'),
+                    'use_options': raw_product.get('use_options'),
+                    'market_info': raw_product.get('market_info'),
+                    'quantity_info': raw_product.get('quantity_info'),
+                    'delivery_info': raw_product.get('delivery_info'),
+                    'idx_com': raw_product.get('idx_com'),
+                    'market': raw_product.get('market'),
+                    'market_name': raw_product.get('market_name'),
+                    'market_type': raw_product.get('market_type'),
+                    'min_order_type': raw_product.get('min_order_type'),
+                    'account_name': raw_product.get('account_name')
                 }
             }
             
@@ -193,6 +216,7 @@ class DomaeMaeConnector(APIConnector):
             
         except Exception as e:
             logger.error(f"도매매 상품 변환 오류: {e}")
+            logger.error(f"문제 데이터: {raw_product}")
             raise
 
     async def _make_api_request(self, method: str, endpoint: str, **kwargs) -> Dict[str, Any]:
