@@ -24,8 +24,21 @@
       "description": "Up-to-date documentation for libraries and frameworks"
     },
     "supabase": {
-      "type": "http",
-      "url": "https://mcp.supabase.com/mcp",
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@supabase-community/supabase-mcp",
+        "--key",
+        "9d78630e-925b-45d2-9654-b2fa5153bfde",
+        "--profile",
+        "coloured-guppy-XJfC0n"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_0a0f40eb67c32e6bbf4969e037f0afd4c78ecfc1"
+      },
       "description": "Supabase database management and queries"
     }
   }
