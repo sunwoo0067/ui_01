@@ -29,18 +29,19 @@
 
 **목표**: API 통합 코드가 완성되었으므로 실제 판매자 계정으로 상품 등록 테스트
 
-**현재 상태 (2025-10-07)**:
+**현재 상태 (2025-10-07 18:00 업데이트)**:
 - ✅ 마이그레이션 005 적용 완료 (marketplace_orders, inventory_sync_log, api_logs 테이블)
 - ✅ 마켓플레이스 5개 등록 완료
 - ✅ 시스템 구조 검증 완료
-- ⏸️ API 키 설정 대기 중
-- ⏸️ 판매 계정 등록 대기 중
+- ✅ 쿠팡 API 키 설정 완료 (Vendor ID: A01282691)
+- ✅ 쿠팡 판매 계정 DB 저장 완료 (계정 ID: bf5613e2-2303-4e87-a085-a26dfd76b30c)
+- ⏭️ 다음: 쿠팡 API 실제 구현 및 상품 등록 테스트
 
 #### 1.1 판매자 계정 API 키 등록
-- [ ] **쿠팡 Wing API 키 발급**
-  - [ ] 쿠팡 판매자 센터에서 API 키 발급
-  - [ ] `.env` 파일에 COUPANG_ACCESS_KEY, SECRET_KEY, VENDOR_ID 입력
-  - [ ] `setup_marketplace_accounts_auto.py` 실행하여 DB에 저장
+- [x] **쿠팡 Wing API 키 발급** ✅ 완료
+  - [x] 쿠팡 판매자 센터에서 API 키 발급
+  - [x] 계정 정보 DB 저장 완료 (Vendor ID: A01282691)
+  - [x] 계정 ID: bf5613e2-2303-4e87-a085-a26dfd76b30c
 - [ ] **네이버 스마트스토어 OAuth 인증**
   - [ ] 네이버 커머스 API 애플리케이션 등록
   - [ ] Client ID, Secret 발급
