@@ -1,0 +1,2640 @@
+오너클랜 api 문서
+
+id : b00679540
+pw: ehdgod1101*
+
+API Endpoint
+오너클랜 API는 Production과 Sandbox 환경 모두에 엔드포인트를 제공합니다.
+해당 엔드포인트를 통해 GraphQL 쿼리를 사용할 수 있습니다.
+
+숨기기
+API URL
+Production: https://api.ownerclan.com/v1/graphql
+
+GraphQL Playground URL
+Production: https://api.ownerclan.com/v1/graphql
+
+각 환경의 엔드포인트에 접속하여 GraphQL Playground에서 직접 쿼리를 실행하고 테스트할 수 있습니다.
+
+JWT 인증
+오너클랜 API는 JWT 토큰 인증 방식을 사용합니다.
+인증을 위해서는 해당 엔드포인트로 아이디와 비밀번호를 POST 요청하여 JWT 토큰을 발급받아야 합니다.
+
+Authentication Endpoint
+Production: https://auth.ownerclan.com/auth
+
+인증 방식
+인증 방식은 JWT를 기반으로 하며, 다음과 같은 데이터를 포함한 POST 요청을 통해 토큰을 발급받을 수 있습니다.
+
+                var authData = {
+                    service: "ownerclan",
+                    userType: "seller",
+                    username: "판매사ID",
+                    password: "판매사PW"
+                };
+        
+                $.ajax({
+                    url: "https://auth.ownerclan.com/auth",
+                    type: "POST",
+                    contentType: "application/json",
+                    processData: false,
+                    data: JSON.stringify(authData),
+                    success: function(data) {
+                        console.log(data); // 발급된 토큰을 콘솔에 출력합니다.
+                    },
+                    error: function(data) {
+                        console.error(data.responseText, data.status); // 에러 처리
+                    }
+                });
+
+GraphQL 사용법
+GraphQL은 단일 엔드포인트에서 모든 데이터를 쿼리하거나 수정할 수 있습니다.
+오너클랜 API는 GraphQL로 구현되어 있으며, 해당 엔드포인트를 통해 데이터를 요청할 수 있습니다.
+
+숨기기
+예시 쿼리
+        query {
+            item(key: "W000000") {
+                name
+                model
+                options {
+                    price
+                    quantity
+                    optionAttributes {
+                        name
+                        value
+                    }
+                }
+            }
+        }
+                
+예시 응답
+        {
+            "data": {
+                "item": {
+                    "name": "예시 상품",
+                    "model": "예시 모델",
+                    "options": [
+                        {
+                            "price": 35000,
+                            "quantity": 23,
+                            "optionAttributes": [
+                                { "name": "색상", "value": "RED" },
+                                { "name": "사이즈", "value": "95" }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+                
+쿼리 전송 방식
+GET 또는 POST 요청을 사용해 GraphQL 쿼리를 전송할 수 있습니다. 예시는 다음과 같습니다:
+
+        var client = new XMLHttpRequest();
+        var readQuery = `query { item(key: "W000000") { name, model } }`;
+        client.open("GET", "https://api-sandbox.ownerclan.com/v1/graphql?query=" + encodeURIComponent(readQuery), true);
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        client.send(null);
+
+단일 주문 정보 조회 API
+단일 주문 정보를 조회합니다. 오너클랜 주문 코드와 일치하는 주문 정보를 반환합니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 조회할 주문 내역의 key입니다. 오너클랜 주문 코드와 같습니다.
+반환 데이터
+주문 정보를 반환하며, 다음 항목을 포함합니다:
+
+key (String): 주문 내역의 key입니다. 오너클랜 주문 코드와 같습니다.
+id (String): 주문 내역의 API ID입니다.
+products ([OrderProduct]): 주문된 제품 정보의 배열입니다.
+quantity (Int): 주문 제품의 수량
+price (Float): 주문 제품의 가격 (수량 반영 전)
+shippingType (ShippingType): 배송비 결제 방식
+itemKey (String): 주문 제품의 상품 key
+itemOptionInfo (Object): 주문 제품의 옵션 정보
+optionAttributes ([Object]): 옵션 정보
+name (String): 옵션명
+value (String): 옵션값
+price (Float): 옵션 가격 (옵션 추가금이 아닌 전체 금액)
+trackingNumber (String): 택배 운송장 번호
+shippingCompanyName (String): 택배사 이름
+shippedDate (Int): 운송장 입력 일시 (Unix timestamp)
+additionalAttributes ([Object]): 추가 속성 정보
+name (String): 속성 이름
+value (String): 속성 값
+taxFree (Boolean): 면세 여부
+status (OrderStatus): 주문 상태
+shippingInfo (ShippingInfo): 배송 정보
+sender (Sender): 보내는 사람 정보
+recipient (Recipient): 받는 사람 정보
+destinationAddress (Address): 받는 주소
+shippingFee (Float): 배송비
+createdAt (Int): 주문 생성 시각 (Unix timestamp)
+updatedAt (Int): 주문 업데이트 시각 (Unix timestamp)
+note (String): 기타 메모 사항
+ordererNote (String): 소비자가 남긴 주문 메모
+sellerNote (String): 판매사 메모 사항
+isBeingMediated (Boolean): 중재 여부
+adjustments ([Adjustment]): 조정 내역
+transactions ([Transaction]): 적립금 사용 내역
+refundDetails ([RefundedOrder]): 반품 요청 내역
+
+/**
+ * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+ * 크롬 브라우저에서 테스트되었습니다.
+ *
+ * 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+ * 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN"); 코드의
+ * YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+ */
+
+/**
+ * 이 예제는 단일 주문내역에 대해 조회할 수 있는 모든 정보를 불러옵니다.
+ */
+
+var client = new XMLHttpRequest();
+
+/**
+ * 정보를 읽어올 주문 코드입니다.
+ */
+var orderKey = "2019000000000000000A";
+
+var readQuery = `
+query {
+  order(key: "$") {
+    key
+    id
+    products {
+      quantity
+      price
+      shippingType
+      itemKey
+      itemOptionInfo {
+        optionAttributes {
+          name
+          value
+        }
+        price
+      }
+      trackingNumber
+      shippingCompanyCode
+      shippedDate
+      additionalAttributes {
+        key
+        value
+      }
+      taxFree
+    }
+    status
+    shippingInfo {
+      sender {
+        name
+        phoneNumber
+        email
+      }
+      recipient {
+        name
+        phoneNumber
+        destinationAddress {
+          addr1
+          addr2
+          postalCode
+        }
+      }
+      shippingFee
+    }
+    createdAt
+    updatedAt
+    note
+    ordererNote
+    sellerNote
+    isBeingMediated
+    adjustments {
+      reason
+      price
+      taxFree
+    }
+    transactions {
+      key
+      id
+      kind
+      status
+      amount {
+        currency
+        value
+      }
+      createdAt
+      updatedAt
+      closedAt
+      note
+    }
+  }
+}
+`;
+
+client.open("GET", "https://api-sandbox.ownerclan.com/v1/graphql?query=" + encodeURIComponent(readQuery), true);
+client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+client.onreadystatechange = function (aEvt) {
+    if (client.readyState === 4) {
+        if (client.status === 200) {
+            var response = JSON.parse(client.responseText);
+            if (response.errors) {
+                // 에러가 있다면 에러를 콘솔에 씁니다.
+                console.log(JSON.stringify(response.errors));
+            } else {
+                // 에러가 없다면 반환된 데이터를 콘솔에 씁니다.
+                console.log(JSON.stringify(response.data));
+            }
+        } else {
+            // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+            console.error(client.status, client.responseText);
+        }
+    }
+}
+
+client.send(null);
+
+복수 주문 내역 조회 API
+복수의 주문내역을 조회합니다. 한 번에 최대 1000개의 주문 내역을 조회할 수 있으며, pagination을 위한 cursor를 제공합니다.
+
+숨기기
+예제 코드
+파라미터
+Pagination 관련 파라미터:
+
+after (String): API 고유 cursor 값으로, 지정된 경우 이 cursor 값 이후의 주문 내역만을 불러옵니다.
+before (String): API 고유 cursor 값으로, 지정된 경우 이 cursor 값 이전의 주문 내역만을 불러옵니다.
+first (Int): 조건을 만족하는 모든 주문 내역 중 처음 몇 개의 주문 내역을 불러올지를 나타냅니다.
+last (Int): 조건을 만족하는 모든 주문 내역 중 마지막 몇 개의 주문 내역을 불러올지를 나타냅니다.
+현재 `before`와 `last`는 정상적으로 동작하지 않을 수 있으니 가급적 `after`와 `first`를 위주로 사용하는 것을 권장합니다.
+
+Search 관련 파라미터:
+
+dateFrom (Timestamp): 주문 내역이 생성된 시각이 이 값 이후인 것들만을 불러옵니다. 생략하면 90일 전으로 설정됩니다.
+dateTo (Timestamp): 주문 내역이 생성된 시각이 이 값 이전인 것들만을 불러옵니다. 생략하면 현재로 설정됩니다.
+note (String): note 필드(원장주문코드)의 값에 입력한 값이 포함되는 주문 내역만을 검색합니다.
+검색 시 dateFrom과 dateTo를 사용해 기간을 90일 또는 그 이내로 지정해야 합니다.
+sellerNote (String): sellerNote 필드(주문 관리 코드)의 값에 입력한 값이 포함되는 주문 내역만을 검색합니다.
+검색 시 dateFrom과 dateTo를 사용해 기간을 90일 또는 그 이내로 지정해야 합니다.
+status (OrderStatus): 주어진 상태에 해당하는 주문 내역만을 불러옵니다.
+shippedAfter (Timestamp): 송장번호가 입력된 시각이 이 값 이후인 것들만을 불러옵니다.
+shippedBefore (Timestamp): 송장번호가 입력된 시각이 이 값 이전인 것들만을 불러옵니다.
+`shippedBefore`는 `shippedAfter` 없이 단독으로 사용할 수 없습니다.
+
+*기간을 명시하는 경우, 기간은 반드시 90일 이내여야 합니다.
+
+반환 값
+allOrders는 pagination을 위한 정보와 주문내역 정보를 동시에 담고 있습니다.
+
+pageInfo: pagination을 위한 정보입니다.
+hasNextPage: 데이터가 뒤에 더 있는지를 나타냅니다.
+hasPreviousPage: 데이터가 앞에 더 있는지를 나타냅니다.
+startCursor: 현재 페이지의 첫 데이터에 대한 cursor 값입니다.
+이 값을 `before` 파라미터에 넘겨주면 정확하게 이전 페이지의 데이터를 가져올 수 있습니다.
+endCursor: 현재 페이지의 마지막 데이터에 대한 cursor 값입니다.
+이 값을 `after` 파라미터에 넘겨주면 정확하게 다음 페이지의 데이터를 가져올 수 있습니다.
+edges: 주문 내역 데이터입니다.
+cursor: 해당 주문 내역의 pagination cursor입니다.
+node: 주문 내역에 대한 정보입니다. `order` 쿼리에서 노출하는 정보와 동일합니다.
+
+/**
+* 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+* 크롬 브라우저에서 테스트되었습니다.
+*
+* 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+* 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorizaiton", "Bearer YOUR_TOKEN"); 코드의
+* YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+*/
+
+/**
+* 이 예제는 여러 개의 주문내역을 동시에 불러옵니다.
+* 검색 조건을 명시하지 않았으므로 모두 기본값으로 동작합니다.
+* (지난 90일 간의 주문 내역 중 주문 시점 내림차순으로 100개)
+* 예제 코드 - 날짜 범위 검색 [https://gist.github.com/hjiung/e7a30751cf5bb900b70e26b7ca78950f]
+* 예제 코드 - 날짜 범위 및 주문 상태 검색 [https://gist.github.com/hjiung/e7a30751cf5bb900b70e26b7ca78950f]
+* 예제 코드 - 원장 주문코드 검색 [https://gist.github.com/hjiung/a380d22596e228ddda8d64f60837a76b]
+* 예제 코드 - 주문관리 메모 검색 [https://gist.github.com/hjiung/fa57abe13543fb838779d85f5dd9fec4]
+* 예제 코드 - 페이지네이션 [https://gist.github.com/hjiung/e7bc7bcc1fa610dd5057a5136a350d64]
+* 예제 코드 - 송장입력 날짜 범위 검색 [https://gist.github.com/jhyeonj/1c57ad52d46a58e3c0bc3be2ec7478db]
+*/
+
+var client = new XMLHttpRequest();
+
+var readQuery = `
+query {
+    allOrders {
+    edges {
+        node {
+        key
+        id
+        products {
+            quantity
+            price
+            shippingType
+            itemKey
+            itemOptionInfo {
+            optionAttributes {
+                name
+                value
+            }
+            price
+            }
+            trackingNumber
+            shippingCompanyName
+            shippedDate
+            additionalAttributes {
+            key
+            value
+            }
+            taxFree
+        }
+        status
+        shippingInfo {
+            sender {
+            name
+            phoneNumber
+            email
+            }
+            recipient {
+            name
+            phoneNumber
+            destinationAddress {
+                addr1
+                addr2
+                postalCode
+            }
+            }
+            shippingFee
+        }
+        createdAt
+        updatedAt
+        note
+        ordererNote
+        sellerNote
+        isBeingMediated
+        adjustments {
+            reason
+            price
+            taxFree
+        }
+        transactions {
+            key
+            id
+            kind
+            status
+            amount {
+            currency
+            value
+            }
+            createdAt
+            updatedAt
+            closedAt
+            note
+        }
+        }
+    }
+    }
+}
+`;
+
+client.open("GET", "https://api-sandbox.ownerclan.com/v1/graphql?query=" + encodeURIComponent(readQuery), true);
+client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+client.onreadystatechange = function (aEvt) {
+    if (client.readyState === 4) {
+        if (client.status === 200) {
+            var response = JSON.parse(client.responseText);
+            if (response.errors) {
+                // 에러가 있다면 에러를 콘솔에 씁니다.
+                console.log(JSON.stringify(response.errors));
+            } else {
+                // 에러가 없다면 반환된 데이터를 콘솔에 씁니다.
+                console.log(JSON.stringify(response.data));
+            }
+        } else {
+            // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+            console.error(client.status, client.responseText);
+        }
+    }
+}
+
+client.send(null);
+
+새 주문 등록 API
+새 주문을 등록합니다. 주문은 입력된 상품 정보에 따라 여러 개로 나뉘어 생성될 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+input (OrderInput): 입력할 데이터입니다.
+simulationResult ([object]): 등록할 주문의 입력 데이터를 기반으로 simulateCreateOrder 쿼리에서 반환된 시뮬레이션 결과입니다. 만약 이 필드에 값이 주어지면, 시뮬레이션 결과와 실제 등록할 주문 내역이 일치하지 않으면 주문이 실패합니다. (자세한 내용은 예제코드 L9 참조)
+입력 데이터
+굵은 글씨는 필수 필드입니다:
+
+sender (SenderInput): 보내는 사람의 정보입니다. SenderInput 타입에 대한 정보는 데이터 형식 - SenderInput 항목을 참고합니다. 생략하면 판매사 계정의 기본값이 사용됩니다.
+recipient (RecipientInput): 받는 사람의 정보입니다. RecipientInput 타입에 대한 정보는 데이터 형식 - RecipientInput 항목을 참고합니다.
+products ([OrderProductInput]): 주문할 상품들의 리스트입니다. OrderProductInput 타입에 대한 정보는 데이터 형식 - OrderProductInput 항목을 참고합니다.
+note (String): 주문 건에 대한 메모 (원장주문코드).
+sellerNote (String): 주문 건에 대한 판매자 메모 (주문관리코드).
+ordererNote (String): 주문 건에 대한 최종 구매자의 배송 요청 사항.
+customsClearanceCode (CustomsClearanceCodeInput): 해외배송 상품 주문 시 입력하는 데이터입니다. 해외배송이 아닐 경우 생략 가능합니다.
+value (String): 입력할 데이터입니다.
+type (CustomsClearanceCodeType): CustomsClearanceCodeType 타입에 대한 정보는 데이터 형식 - CustomsClearanceCodeType 항목을 참고합니다.
+반환 데이터
+새로 생성된 주문 정보를 반환합니다. 상품 내용에 따라 주문이 여러 개로 나뉘어 생성될 수 있습니다.
+
+공급사(Item.metadata.vendorKey 필드)가 다른 경우
+배송비 부과 방식(Item.shippingType 필드)이 다른 경우
+예: 공급사 A의 선불 상품 2개, B의 무료배송 상품 1개, 착불 상품 1개를 주문한 경우 3개의 주문으로 나뉘어 생성됩니다.
+
+/**
+* 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+* 크롬 브라우저에서 테스트되었습니다.
+*
+* 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+* 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorizaiton", "Bearer YOUR_TOKEN"); 코드의
+* YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+*/
+* 예제코드 - 시뮬레이션 결과 검증이 들어간 단일 주문 [https://gist.github.com/hjiung/9660e4ad4053ff8edae9e3b7142a095f]
+* 예제코드 - 해외배송 상품 주문 생성 [https://gist.github.com/jhyeonj/ddaeae3fb59ca866015f3cbb02c7a466]
+/**
+* XHR 클라이언트 객체입니다.
+*/
+var client = new XMLHttpRequest();
+
+/**
+* `createOrder` 쿼리 본문입니다.
+*/
+var createQuery = `mutation CreateOrder($input: OrderInput!) {
+    createOrder(input: $input) {
+        key
+        id
+        products {
+            quantity
+            price
+            shippingType
+            itemKey
+            productName
+            itemOptionInfo {
+                optionAttributes {
+                    name
+                    value
+                }
+                price
+            }
+            trackingNumber
+            shippingCompanyCode
+            shippingCompanyName
+            shippedDate
+            additionalAttributes {
+                key
+                value
+            }
+            taxFree
+        }
+        status
+        shippingInfo {
+            sender {
+                name
+                phoneNumber
+                email
+            }
+            recipient {
+                name
+                phoneNumber
+                destinationAddress {
+                    addr1
+                    addr2
+                    postalCode
+                }
+            }
+            shippingFee
+        }
+        createdAt
+        updatedAt
+        note
+        ordererNote
+        sellerNote
+        isBeingMediated
+        adjustments {
+            reason
+            price
+            taxFree
+        }
+        transactions {
+            key
+            id
+            kind
+            status
+            amount {
+                currency
+                value
+            }
+            createdAt
+            updatedAt
+            closedAt
+            note
+        }
+    }
+}`;
+
+/**
+* `createOrder` 쿼리에 사용되는 변수를 설정하는 object입니다.
+* 
+* 위의 쿼리에서는 `$input`이라는 변수만 사용하므로 여기에서도 `input`에 대한 값만을 설정합니다.
+*
+* 아래 예시 입력에 사용된 상품코드는 예시이므로 동작하지 않습니다.
+*/
+var inputVariables = {
+    input: {
+        sender: {
+            name: "보내는이",
+            phoneNumber: "010-1234-5678",
+            email: "your_id@email.com"
+        },
+        recipient: {
+            name: "받는이",
+            phoneNumber: "010-8765-4321",
+            destinationAddress: {
+                addr1: "서울 금천구 가산디지털1로 128",
+                addr2: "808호",
+                postalCode: "08507"
+            }
+        },
+        products: [
+            {
+                quantity: 4,
+                itemKey: "W999999",
+                optionAttributes: [
+                    "블랙"
+                ]
+            },
+            {
+                quantity: 3,
+                itemKey: "W999999",
+                optionAttributes: [
+                    "로즈골드"
+                ]
+            },
+            {
+                quantity: 1,
+                itemKey: "W999998",
+                optionAttributes: [
+                    "골드"
+                ]
+            },
+            {
+                quantity: 2,
+                itemKey: "W999998",
+                optionAttributes: [
+                    "실버"
+                ]
+            },
+            {
+                quantity: 5,
+                itemKey: "W999997",
+                optionAttributes: [
+                    "화이트",
+                    "토끼당근"
+                ]
+            },
+            {
+                quantity: 2,
+                itemKey: "W999996",
+                optionAttributes: [
+                    "그린티"
+                ]
+            },
+            {
+                quantity: 1,
+                itemKey: "W999995",
+                optionAttributes: []
+            }
+        ],
+        note: "원장주문코드",
+        sellerNote: "주문관리코드",
+        ordererNote: "배송시 요청사항",
+        customsClearanceCode: {
+            type: "PersonalNumber",
+            value: "P012345678910"
+        }
+    }
+};
+
+// XHR 클라이언트를 열고, 인증 헤더와 XHR 요청이 완료되었을 때의 callback을 설정합니다.
+client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+client.setRequestHeader("Content-Type", "application/json");
+client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+client.onreadystatechange = function (aEvt) {
+    if (client.readyState === 4) {
+        if (client.status === 200) {
+            var response = JSON.parse(client.responseText);
+            if (response.errors) {
+                // API 서버 응답이 정상이지만 API 에러가 있다면 에러를 콘솔에 씁니다.
+                console.error(JSON.stringify(response.errors));
+            } else {
+                // API 서버 응답도 정상이고, API 에러도 없다면 반환된 데이터를 콘솔에 씁니다.
+                console.log(JSON.stringify(response.data));
+            }
+        } else {
+            // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+            console.error(client.status, client.responseText);
+        }
+    }
+}
+
+/*
+* XHR 요청을 전송합니다.
+* operationName은 GraphQL 쿼리에서 `mutation ... {` 부분의 `...`과 같은 값이어야합니다.
+* query는 위에서 문자열 변수로 만든 것을 사용하면 되고,
+* variables 역시 위에서 object로 만든 것을 사용하면 됩니다.
+*/
+client.send(JSON.stringify({
+    operationName: "CreateOrder",
+    query: createQuery,
+    variables: inputVariables
+}));
+
+테스트 주문 API
+주문을 실제로 등록하지 않고, 예상되는 상품 금액과 배송비 정보를 제공합니다.
+
+숨기기
+예제 코드
+파라미터
+input (OrderInput): 입력할 데이터입니다. createOrder와 동일합니다.
+입력 데이터
+createOrder의 입력과 동일합니다.
+
+반환 데이터
+상품 금액 정보와 배송비 정보를 반환합니다. 각 object는 1개의 주문에 대응되며, 아래와 같은 필드를 포함합니다:
+
+itemAmounts ([object]): 상품 관련 금액 정보
+amount (Int): 주문 수량이 반영된 최종 상품 금액
+itemKey (String): 상품 Key (오너클랜 상품 코드)
+shippingAmount (Int): 최종 배송비 (추가 배송비 포함)
+extraShippingFeeExists (Boolean): 추가 배송비 반영 여부
+
+ /**
+    * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+    * 크롬 브라우저에서 테스트되었습니다.
+    *
+    * 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+    * 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorizaiton", "Bearer YOUR_TOKEN"); 코드의
+    * YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+    */
+
+    /**
+    * XHR 클라이언트 객체입니다.
+    */
+    var client = new XMLHttpRequest();
+
+    /**
+    * `createOrder` 쿼리 본문입니다.
+    */
+    var createQuery = `mutation SimulateCreateOrder($input: OrderInput!) {
+        simulateCreateOrder(input: $input) {
+        itemAmounts {
+            amount
+            itemKey
+        }
+        shippingAmount
+        extraShippingFeeExists
+        }
+    }`;
+
+    /**
+    * `createOrder` 쿼리에 사용되는 변수를 설정하는 object입니다.
+    * 
+    * 위의 쿼리에서는 `$input`이라는 변수만 사용하므로 여기에서도 `input`에 대한 값만을 설정합니다.
+    *
+    * 아래 예시 입력에 사용된 상품코드는 예시이므로 동작하지 않습니다.
+    */
+    var inputVariables = {
+        input: {
+            sender: {
+                name: "보내는이",
+                phoneNumber: "010-1234-5678",
+                email: "your_id@email.com"
+            },
+            recipient: {
+                name: "받는이",
+                phoneNumber: "010-8765-4321",
+                destinationAddress: {
+                    addr1: "서울 금천구 가산디지털1로 128",
+                    addr2: "808호",
+                    postalCode: "08507"
+                }
+            },
+            products: [
+                {
+                    quantity: 4,
+                    itemKey: "W999999",
+                    optionAttributes: [
+                        "블랙"
+                    ]
+                },
+                {
+                    quantity: 3,
+                    itemKey: "W999999",
+                    optionAttributes: [
+                        "로즈골드"
+                    ]
+                },
+                {
+                    quantity: 1,
+                    itemKey: "W999998",
+                    optionAttributes: [
+                        "골드"
+                    ]
+                },
+                {
+                    quantity: 2,
+                    itemKey: "W999998",
+                    optionAttributes: [
+                        "실버"
+                    ]
+                },
+                {
+                    quantity: 5,
+                    itemKey: "W999997",
+                    optionAttributes: [
+                        "화이트",
+                        "토끼당근"
+                    ]
+                },
+                {
+                    quantity: 2,
+                    itemKey: "W999996",
+                    optionAttributes: [
+                        "그린티"
+                    ]
+                },
+                {
+                    quantity: 1,
+                    itemKey: "W999995",
+                    optionAttributes: []
+                }
+            ],
+            note: "원장주문코드",
+            sellerNote: "주문관리코드",
+            ordererNote: "배송시 요청사항",
+            customsClearanceCode: "통관고유번호"
+        }
+    };
+
+    // XHR 클라이언트를 열고, 인증 헤더와 XHR 요청이 완료되었을 때의 callback을 설정합니다.
+    client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+    client.setRequestHeader("Content-Type", "application/json");
+    client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+    client.onreadystatechange = function (aEvt) {
+        if (client.readyState === 4) {
+            if (client.status === 200) {
+                var response = JSON.parse(client.responseText);
+                if (response.errors) {
+                    // API 서버 응답이 정상이지만 API 에러가 있다면 에러를 콘솔에 씁니다.
+                    console.error(JSON.stringify(response.errors));
+                } else {
+                    // API 서버 응답도 정상이고, API 에러도 없다면 반환된 데이터를 콘솔에 씁니다.
+                    console.log(JSON.stringify(response.data));
+                }
+            } else {
+                // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+                console.error(client.status, client.responseText);
+            }
+        }
+    }
+
+    /*
+    * XHR 요청을 전송합니다.
+    * operationName은 GraphQL 쿼리에서 `mutation ... {` 부분의 `...`과 같은 값이어야합니다.
+    * query는 위에서 문자열 변수로 만든 것을 사용하면 되고,
+    * variables 역시 위에서 object로 만든 것을 사용하면 됩니다.
+    */
+    client.send(JSON.stringify({
+        operationName: "SimulateCreateOrder",
+        query: createQuery,
+        variables: inputVariables
+    }));
+
+주문 메모 업데이트 API
+기존 주문의 원청주문코드와 주문관리메모를 업데이트합니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 원청주문코드 또는 주문관리메모를 수정할 주문의 주문코드입니다.
+input (OrderUpdateNotesInput): 수정할 데이터입니다.
+입력 데이터
+note (String): 원청주문코드입니다.
+sellerNotes ([SellerNoteInput]): 주문관리메모입니다.
+sellerNote (String): 설정할 주문관리메모입니다.
+주의사항
+주문관리메모는 주문 전체 또는 주문 상품별로 설정할 수 있으며, 다음 원칙을 따라야 합니다:
+
+주문 전체에 대해 설정하는 경우: 배열에 하나의 object만 있어야 하며, 주문 전체에 대해 하나의 주문관리메모만 노출됩니다. (Order.sellerNote)
+주문 상품별로 설정하는 경우: READ API(order)에서 얻은 주문 상품 순서에 맞게 주문관리메모 object를 배열로 지정하면 됩니다. 첫 번째 주문 상품의 주문관리메모가 주문 전체에 대해 노출됩니다. (Order.products.sellerNote)
+
+/**
+    * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+    * 크롬 브라우저에서 테스트되었습니다.
+    *
+    * 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+    * 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorizaiton", "Bearer YOUR_TOKEN"); 코드의
+    * YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+    */
+    * 예제 코드 - 주문관리메모 전체 수정 [https://gist.github.com/hjiung/f6b83ad6957ea74974292e0ec8cc66ba]
+    * 예제 코드 - 주문관리메모 상품별 수정 [https://gist.github.com/hjiung/96e64e7fcd28e5af8b409e83fc6da40f]
+
+    /**
+    * XHR 클라이언트 객체입니다.
+    */
+    var client = new XMLHttpRequest();
+
+    /**
+    * `updateOrderNotes` 쿼리 본문입니다.
+    *
+    * 아래 예시에서 사용된 주문 코드는 예시이므로 동작하지 않습니다.
+    */
+    var updateQuery = `mutation UpdateOrderNotes($input: OrderUpdateNotesInput!) {
+        updateOrderNotes(key: "2020022000000000000A", input: $input) {
+        key
+        id
+        products {
+            quantity
+            price
+            shippingType
+            itemKey
+            productName
+            itemOptionInfo {
+            optionAttributes {
+                name
+                value
+            }
+            price
+            }
+            trackingNumber
+            shippingCompanyCode
+            shippingCompanyName
+            shippedDate
+            additionalAttributes {
+            key
+            value
+            }
+            taxFree
+            sellerNote
+        }
+        status
+        shippingInfo {
+            sender {
+            name
+            phoneNumber
+            email
+            }
+            recipient {
+            name
+            phoneNumber
+            destinationAddress {
+                addr1
+                addr2
+                postalCode
+            }
+            }
+            shippingFee
+        }
+        createdAt
+        updatedAt
+        note
+        ordererNote
+        sellerNote
+        isBeingMediated
+        adjustments {
+            reason
+            price
+            taxFree
+        }
+        transactions {
+            key
+            id
+            kind
+            status
+            amount {
+            currency
+            value
+            }
+            createdAt
+            updatedAt
+            closedAt
+            note
+        }
+        }
+    }`;
+
+    /**
+    * `updateOrderNotes` 쿼리에 사용되는 변수를 설정하는 object입니다.
+    * 
+    * 위의 쿼리에서는 `$input`라는 변수를 사용하므로 여기에서도 `input`에 대한 값을 설정합니다.
+    */
+    var inputVariables = {
+        "input": {
+        "note": "원장주문코드 - 수정"
+        }
+    };
+
+    // XHR 클라이언트를 열고, 인증 헤더와 XHR 요청이 완료되었을 때의 callback을 설정합니다.
+    client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+    client.setRequestHeader("Content-Type", "application/json");
+    client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+    client.onreadystatechange = function (aEvt) {
+        if (client.readyState === 4) {
+            if (client.status === 200) {
+                var response = JSON.parse(client.responseText);
+                if (response.errors) {
+                    // API 서버 응답이 정상이지만 API 에러가 있다면 에러를 콘솔에 씁니다.
+                    console.error(JSON.stringify(response.errors));
+                } else {
+                    // API 서버 응답도 정상이고, API 에러도 없다면 반환된 데이터를 콘솔에 씁니다.
+                    console.log(JSON.stringify(response.data));
+                }
+            } else {
+                // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+                console.error(client.status, client.responseText);
+            }
+        }
+    }
+
+    /*
+    * XHR 요청을 전송합니다.
+    * operationName은 GraphQL 쿼리에서 `mutation ... {` 부분의 `...`과 같은 값이어야합니다.
+    * query는 위에서 문자열 변수로 만든 것을 사용하면 되고,
+    * variables 역시 위에서 object로 만든 것을 사용하면 됩니다.
+    */
+    client.send(JSON.stringify({
+        operationName: "UpdateOrderNotes",
+        query: createQuery,
+        variables: inputVariables
+    }));
+
+주문 취소 API
+주문을 취소합니다. 단, 결제 완료(paid) 상태인 주문만 취소할 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 취소할 주문의 주문코드입니다.
+반환 데이터
+취소된 주문의 정보를 반환합니다. 반환 데이터는 order 쿼리의 결과와 동일합니다.
+
+예시 쿼리
+아래 2개의 코드 중 첫 번째는 실제 쿼리이고, 두 번째는 쿼리에서 쓰이는 $key variable을 정 의한 것입니다.
+GraphQL Playground에서 테스트할 때는 쿼리를 입력하는 공간 아래에 QUERY VARIABLES에 입력하면 됩니다.
+(예시 데이터이므로 그대로 붙여넣어도 작동하지는 않습니다.)
+
+mutation CancelOrder($key: ID!) { 
+    cancelOrder(key: $key) { 
+        key 
+        id 
+        products { 
+        quantity 
+        price 
+        shippingType 
+        itemKey 
+        productName 
+        itemOptionInfo { 
+            optionAttributes { 
+            name 
+            value 
+            } price 
+        } 
+        trackingNumber 
+        shippingCompanyCode 
+        shippingCompanyName 
+        shippedDate 
+        additionalAttributes { 
+            key 
+            value 
+        } 
+        taxFree 
+        sellerNote 
+        } 
+        status 
+        shippingInfo { 
+        sender { 
+            name 
+            phoneNumber 
+            email 
+        } 
+        recipient { 
+            name 
+            phoneNumber 
+            destinationAddress { 
+            addr1 
+            addr2 
+            postalCode 
+            } 
+        } 
+        shippingFee 
+        } 
+        createdAt 
+        updatedAt 
+        note 
+        ordererNote 
+        sellerNote 
+        isBeingMediated 
+        adjustments { 
+        reason 
+        price 
+        taxFree 
+        } 
+        transactions { 
+        key 
+        id 
+        kind 
+        status 
+        amount { 
+            currency 
+            value 
+        } 
+        createdAt 
+        updatedAt 
+        closedAt
+        note 
+    } 
+    } 
+} 
+
+------------------------------------------------------
+
+{ 
+"key": "2020000000000000000A"
+} 
+
+/**
+* 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+* 크롬 브라우저에서 테스트되었습니다.
+*
+* 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+* 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorizaiton", "Bearer YOUR_TOKEN"); 코드의
+* YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+*/
+
+/**
+* XHR 클라이언트 객체입니다.
+*/
+var client = new XMLHttpRequest();
+
+/**
+* `cancelOrder` 쿼리 본문입니다.
+*
+* 아래 예시에서 사용된 주문 코드는 예시이므로 동작하지 않습니다.
+*/
+var updateQuery = `mutation CancelOrder($key: ID!) {
+    cancelOrder(key: $key) {
+    key
+    id
+    products {
+        quantity
+        price
+        shippingType
+        itemKey
+        productName
+        itemOptionInfo {
+        optionAttributes {
+            name
+            value
+        }
+        price
+        }
+        trackingNumber
+        shippingCompanyCode
+        shippingCompanyName
+        shippedDate
+        additionalAttributes {
+        key
+        value
+        }
+        taxFree
+        sellerNote
+    }
+    status
+    shippingInfo {
+        sender {
+        name
+        phoneNumber
+        email
+        }
+        recipient {
+        name
+        phoneNumber
+        destinationAddress {
+            addr1
+            addr2
+            postalCode
+        }
+        }
+        shippingFee
+    }
+    createdAt
+    updatedAt
+    note
+    ordererNote
+    sellerNote
+    isBeingMediated
+    adjustments {
+        reason
+        price
+        taxFree
+    }
+    transactions {
+        key
+        id
+        kind
+        status
+        amount {
+        currency
+        value
+        }
+        createdAt
+        updatedAt
+        closedAt
+        note
+    }
+    }
+}`;
+
+/**
+* `cancelOrder` 쿼리에 사용되는 변수를 설정하는 object입니다.
+* 
+* 위의 쿼리에서는 `$key`라는 변수를 사용하므로 여기에서도 `key`에 대한 값을 설정합니다.
+*/
+var inputVariables = {
+    "key": "2020000000000000000A"
+};
+
+// XHR 클라이언트를 열고, 인증 헤더와 XHR 요청이 완료되었을 때의 callback을 설정합니다.
+client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+client.setRequestHeader("Content-Type", "application/json");
+client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+client.onreadystatechange = function (aEvt) {
+    if (client.readyState === 4) {
+        if (client.status === 200) {
+            var response = JSON.parse(client.responseText);
+            if (response.errors) {
+                // API 서버 응답이 정상이지만 API 에러가 있다면 에러를 콘솔에 씁니다.
+                console.error(JSON.stringify(response.errors));
+            } else {
+                // API 서버 응답도 정상이고, API 에러도 없다면 반환된 데이터를 콘솔에 씁니다.
+                console.log(JSON.stringify(response.data));
+            }
+        } else {
+            // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+            console.error(client.status, client.responseText);
+        }
+    }
+}
+
+/*
+* XHR 요청을 전송합니다.
+* operationName은 GraphQL 쿼리에서 `mutation ... {` 부분의 `...`과 같은 값이어야합니다.
+* query는 위에서 문자열 변수로 만든 것을 사용하면 되고,
+* variables 역시 위에서 object로 만든 것을 사용하면 됩니다.
+*/
+client.send(JSON.stringify({
+    operationName: "CancelOrder",
+    query: updateQuery,
+    variables: inputVariables
+}));
+
+주문 취소 요청 API
+주문 취소를 요청합니다. 단, 배송 준비중(preparing) 상태의 주문만 취소 요청이 가능합니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 주문 취소를 요청할 주문의 주문코드입니다.
+input (RequestOrderCancellationInput): 주문 취소에 필요한 입력 데이터입니다.
+입력 데이터
+cancelReason (String): 취소 요청 사유입니다.
+반환 데이터
+취소 요청이 처리된 주문의 정보를 반환합니다. 반환 데이터는 order 쿼리의 결과와 동일합니다.
+
+예시 쿼리
+아래 두 개의 코드는 첫 번째가 실제 쿼리이며, 두 번째는 $key와 $input 변수를 정의한 것입니다.
+GraphQL Playground에서 테스트할 때 쿼리 공간 아래의 QUERY VARIABLES에 입력하면 됩니다.
+(예시 데이터이므로 그대로 붙여넣어도 작동하지 않습니다.)
+
+mutation RequestOrderCancellation($key: ID!, $input: RequestOrderCancellationInput!) { 
+    requestOrderCancellation(key: $key, input: $input) { 
+        key 
+        id 
+        products { 
+            quantity 
+            price 
+            shippingType 
+            itemKey 
+            productName 
+            itemOptionInfo { 
+                optionAttributes { 
+                    name 
+                    value 
+                } 
+                price 
+            } 
+            trackingNumber 
+            shippingCompanyCode 
+            shippingCompanyName 
+            shippedDate 
+            additionalAttributes { 
+                key 
+                value 
+            } 
+            taxFree 
+            sellerNote 
+        } 
+        status 
+        shippingInfo { 
+            sender { 
+                name 
+                phoneNumber 
+                email 
+            } 
+            recipient { 
+                name 
+                phoneNumber 
+                destinationAddress { 
+                    addr1 
+                    addr2 
+                    postalCode 
+                } 
+            } 
+            shippingFee 
+        } 
+        createdAt 
+        updatedAt 
+        note 
+        ordererNote 
+        sellerNote 
+        isBeingMediated 
+        adjustments { 
+            reason 
+            price 
+            taxFree 
+        } 
+        transactions { 
+            key 
+            id 
+            kind 
+            status 
+            amount { 
+                currency 
+                value 
+            } 
+            createdAt 
+            updatedAt 
+            closedAt
+            note 
+        } 
+    } 
+} 
+
+------------------------------------------------------
+
+{ 
+    "key": "2020000000000000000A", 
+    "input": { 
+    "cancelReason": "주문 취소 요청 사유." 
+    } 
+} 
+
+/**
+* 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+* 크롬 브라우저에서 테스트되었습니다.
+*
+* 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+* 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorizaiton", "Bearer YOUR_TOKEN"); 코드의
+* YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+*/
+
+/**
+* XHR 클라이언트 객체입니다.
+*/
+var client = new XMLHttpRequest();
+
+/**
+* `requestOrderCancellation` 쿼리 본문입니다.
+*
+* 아래 예시에서 사용된 주문 코드는 예시이므로 동작하지 않습니다.
+*/
+var updateQuery = `mutation RequestOrderCancellation($key: ID!, $input: RequestOrderCancellationInput!) {
+requestOrderCancellation(key: $key, input: $input) {
+key
+id
+products {
+    quantity
+    price
+    shippingType
+    itemKey
+    productName
+    itemOptionInfo {
+    optionAttributes {
+        name
+        value
+    }
+    price
+    }
+    trackingNumber
+    shippingCompanyCode
+    shippingCompanyName
+    shippedDate
+    additionalAttributes {
+    key
+    value
+    }
+    taxFree
+    sellerNote
+}
+status
+shippingInfo {
+    sender {
+    name
+    phoneNumber
+    email
+    }
+    recipient {
+    name
+    phoneNumber
+    destinationAddress {
+        addr1
+        addr2
+        postalCode
+    }
+    }
+    shippingFee
+}
+createdAt
+updatedAt
+note
+ordererNote
+sellerNote
+isBeingMediated
+adjustments {
+    reason
+    price
+    taxFree
+}
+transactions {
+    key
+    id
+    kind
+    status
+    amount {
+    currency
+    value
+    }
+    createdAt
+    updatedAt
+    closedAt
+    note
+}
+}
+}`;
+
+/**
+* `requestOrderCancellation` 쿼리에 사용되는 변수를 설정하는 object입니다.
+* 
+* 위의 쿼리에서는 `$key`, `$input`이라는 두 개의 변수를 사용하므로 여기에서도 `key`와 `input`에 대한 값을 설정합니다.
+*/
+var inputVariables = {
+"key": "2020000000000000000A",
+"input": {
+cancelReason: "주문 취소 사유."
+}
+};
+
+// XHR 클라이언트를 열고, 인증 헤더와 XHR 요청이 완료되었을 때의 callback을 설정합니다.
+client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+client.setRequestHeader("Content-Type", "application/json");
+client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+client.onreadystatechange = function (aEvt) {
+if (client.readyState === 4) {
+    if (client.status === 200) {
+        var response = JSON.parse(client.responseText);
+        if (response.errors) {
+            // API 서버 응답이 정상이지만 API 에러가 있다면 에러를 콘솔에 씁니다.
+            console.error(JSON.stringify(response.errors));
+        } else {
+            // API 서버 응답도 정상이고, API 에러도 없다면 반환된 데이터를 콘솔에 씁니다.
+            console.log(JSON.stringify(response.data));
+        }
+    } else {
+        // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+        console.error(client.status, client.responseText);
+    }
+}
+}
+
+/*
+* XHR 요청을 전송합니다.
+* operationName은 GraphQL 쿼리에서 `mutation ... {` 부분의 `...`과 같은 값이어야합니다.
+* query는 위에서 문자열 변수로 만든 것을 사용하면 되고,
+* variables 역시 위에서 object로 만든 것을 사용하면 됩니다.
+*/
+client.send(JSON.stringify({
+operationName: "equestOrderCancellation",
+query: updateQuery,
+variables: inputVariables
+}));
+
+단일 상품 정보 조회 API
+단일 상품 정보를 조회합니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 조회할 상품의 key입니다.
+lang (Language): 텍스트 필드들의 언어를 설정합니다. 기본값은 ko_KR입니다.
+currency (Currency): 가격 정보 필드의 화폐 단위를 설정합니다. 기본값은 KRW입니다.
+반환 데이터
+상품 정보를 반환하며, 다음과 같은 내용을 포함합니다:
+
+createdAt (Int): 상품이 등록된 시각 (Unix timestamp)
+updatedAt (Int): 상품이 최종 업데이트된 시각 (Unix timestamp)
+key (String): 상품의 오너클랜 코드
+name (Text): 상품의 이름
+model (String): 상품의 모델명
+production (String): 제조사
+origin (String): 제조국가
+price (Float): 상품의 가격
+pricePolicy (PricePolicy): 상품의 가격 정책
+fixedPrice (Float): 소비자 준수 가격
+category (Category): 상품 카테고리 정보
+shippingFee (Int): 상품 배송비
+shippingType (ShippingType): 배송비 부과 타입
+status (String): 상품의 상태
+options ([ItemOption]): 상품 옵션 정보
+taxFree (Boolean): 면세 여부
+adultOnly (Boolean): 성인 전용 상품 여부
+returnable (Boolean): 반품 가능 여부
+images ([URL]): 상품 이미지 URL 목록
+
+ /**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query testQuery { 
+          item(key: "W000000") { 
+            createdAt 
+            updatedAt 
+            key 
+            name 
+            model 
+            production 
+            origin 
+            price 
+            pricePolicy 
+            fixedPrice 
+            category { 
+              key 
+              name 
+              fullName 
+            } 
+            shippingFee 
+            shippingType 
+            images(size: large) 
+            status 
+            options { 
+              optionAttributes { 
+                name 
+                value 
+              } 
+              price 
+              quantity 
+            } 
+            taxFree 
+            adultOnly 
+            returnable 
+            guaranteedShippingPeriod 
+            openmarketSellable 
+            boxQuantity 
+            attributes 
+            returnCriteria 
+            metadata 
+          } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+
+복수 상품 정보 조회 API
+복수의 상품 정보를 조회합니다. 한 번에 최대 1000개의 상품을 조회할 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+after (String): 지정된 cursor 값 이후의 상품만을 불러옵니다.
+first (Int): 첫 몇 개의 상품을 불러올지를 나타냅니다.
+minPrice (Int): 최저 가격 기준으로 상품을 검색합니다.
+maxPrice (Int): 최고 가격 기준으로 상품을 검색합니다.
+search (String): 상품 검색어입니다.
+반환 데이터
+allItems는 pagination 정보와 상품 정보를 포함합니다:
+
+pageInfo: pagination 정보
+edges: 상품 정보
+
+복수 상품 정보 조회 API
+복수의 상품 정보를 조회합니다. 한 번에 최대 1000개의 상품을 조회할 수 있습니다.
+
+더 보기
+숨기기
+        /**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query { 
+          allItems(first: 50, minPrice: 10000, maxPrice: 50000) { 
+            pageInfo { 
+              hasNextPage 
+              startCursor 
+              endCursor 
+            } 
+            edges { 
+              node { 
+                key 
+                name 
+                price 
+                status 
+                options { 
+                  optionAttributes { 
+                    name 
+                    value 
+                  } 
+                  price 
+                  quantity 
+                } 
+              } 
+            } 
+          } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+상품 변경 이력 조회 API
+상품의 품절, 단종, 재입고 등의 변경 이력을 조회합니다.
+
+숨기기
+예제 코드
+파라미터
+after (String): 지정된 cursor 값 이후의 내역만 불러옵니다.
+first (Int): 첫 몇 개의 내역을 불러올지를 나타냅니다.
+dateFrom (Timestamp): 지정된 날짜 이후의 내역만을 불러옵니다.
+kind (ItemHistoryKind): 조회할 이력의 종류를 선택합니다.
+itemKey (ID): 특정 상품의 이력만을 조회합니다.
+반환 데이터
+itemHistories는 pagination 정보와 이력 데이터를 포함합니다:
+
+pageInfo: pagination 정보
+edges: 이력 정보
+
+/**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query { 
+          itemHistories(first: 100, kind: soldout) { 
+            pageInfo { 
+              hasNextPage 
+              startCursor 
+              endCursor 
+            } 
+            edges { 
+              node { 
+                itemKey 
+                kind 
+                title 
+                valueBefore 
+                valueAfter 
+                createdAt 
+              } 
+            } 
+          } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+
+여러 상품 정보 조회 API
+여러 상품을 상품의 key(오너클랜 상품코드) 리스트를 기준으로 조회합니다. 한 번의 요청에 최대 5000개의 key를 요청할 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+keys (Array of String): 조회할 상품 key들의 배열입니다.
+반환 값
+조회된 상품 정보의 배열을 반환하며, 각 항목은 다음과 같은 정보를 포함합니다:
+
+createdAt (Int): 상품이 등록된 시각 (Unix timestamp)
+updatedAt (Int): 상품이 최종 업데이트된 시각 (Unix timestamp)
+key (String): 상품의 오너클랜 코드
+name (Text): 상품의 이름
+model (String): 상품의 모델명
+production (String): 제조사
+origin (String): 제조국가
+price (Float): 상품의 가격
+category (Category): 상품 카테고리 정보
+content (String): 상품의 상세정보
+shippingFee (Int): 상품 배송비
+status (String): 상품의 상태
+options ([ItemOption]): 상품 옵션 정보
+taxFree (Boolean): 면세 여부
+returnable (Boolean): 반품 가능 여부
+images ([URL]): 상품 이미지 URL 목록
+
+/**
+        * 아래 예제는 여러 상품을 key 리스트로 조회하는 코드입니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query ItemsByKeys { 
+          itemsByKeys(keys: ["W999999", "W999998", "W999997"]) { 
+            createdAt 
+            updatedAt 
+            key 
+            name 
+            model 
+            production 
+            origin 
+            price 
+            category { 
+              key 
+              name 
+            } 
+            content 
+            shippingFee 
+            status 
+            options { 
+              optionAttributes { 
+                name 
+                value 
+              } 
+              price 
+              quantity 
+              key 
+            } 
+            taxFree 
+            returnable 
+            images(size: large) 
+          } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+
+/**
+        * 아래 예제는 여러 상품을 key 리스트로 조회하는 코드입니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query ItemsByKeys { 
+          itemsByKeys(keys: ["W999999", "W999998", "W999997"]) { 
+            createdAt 
+            updatedAt 
+            key 
+            name 
+            model 
+            production 
+            origin 
+            price 
+            category { 
+              key 
+              name 
+            } 
+            content 
+            shippingFee 
+            status 
+            options { 
+              optionAttributes { 
+                name 
+                value 
+              } 
+              price 
+              quantity 
+              key 
+            } 
+            taxFree 
+            returnable 
+            images(size: large) 
+          } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+
+/**
+ * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+ * 크롬 브라우저에서 테스트되었습니다.
+ *
+ * 토큰은 manual.md 파일의 JWT 인증 섹션에 있는 방식으로 발급받을 수 있으며,
+ * 이 예제 코드 하단부에 있는 client.setRequestHeader("Authorizaiton", "Bearer YOUR_TOKEN"); 코드의
+ * YOUR_TOKEN 부분에 발급받은 토큰을 넣어주시면 됩니다.
+ */
+
+/**
+ * 이 예제는 allItems 쿼리로 검색을 진행할 수 있도록 합니다.
+ *
+ * ----------
+ *
+ * `readQuery1`을 제외한 나머지 쿼리 예제에서는 dateFrom이 쓰이지 않는다면
+ * dateFrom 파라미터의 값을 0으로 항상 명시했습니다.
+ * 이는 dateFrom 파라미터의 값이 0이면 실제 시간으로 1970-01-01 00:00:00이므로
+ * 등록된 모든 상품에 대해 검색하기 위함입니다.
+ * 테스팅 환경이 아닌 정식 환경에서 사용할 경우에는 적절한 값을 사용해주시면 됩니다.
+ *
+ * ----------
+ *
+ * `readQuery1`: 상품 수정일 검색(90일 전부터 30일 전까지)
+ * `readQuery2`: 가격 검색(10000원 이상, 20000원 이하)
+ * `readQuery3`: 벤더 코드 검색(실제로 검색할 벤더를 넣어주시면 됩니다.)
+ * `readQuery4`: 카테고리 코드 검색(카테고리 코드가 50000108)
+ * `readQuery5`: 복합 검색(가격은 50000원 이하이고 최근 60일간 등록된 상품 중에서 카테고리 코드가 50000108인 상품)
+ * `readQuery6`: 페이지네이션1(주어진 cursor 값 이의 상품 중 첫 500개 불러오기)
+ * `readQuery7`: 페이지네이션2(주어진 cursor 값 이전의 상품 중 마지막 100개 불러오기)
+ * `readQuery8`: 가격이 50000원 이하이고 최근 120일간 등록된, 카테고리 코드가 50000108인 상품 중 주어진 cursor 값 이후의 상품 10개 불러오기
+ */
+
+/**
+ * 예제 8
+ */
+
+var client = new XMLHttpRequest();
+
+/**
+ * 120일 전의 UNIX timestamp를 가져옵니다.
+ */
+var pastSixtyDaysTimestamp = (Date.now() - 60 * 60 * 24 * 120 * 1000);
+
+/**
+ * 상품을 조회할 카테고리의 key입니다.
+ */
+var category = "50000108";
+
+/**
+ * 이 cursor 값 이후의 상품들 중에서만 가져옵니다.
+ */
+var endCursor = "50";
+
+var readQuery = `
+query {
+    allItems(dateFrom: ${pastSixtyDaysTimestamp}, after: "${endCursor}", first: 10, maxPrice: 50000, category: "${category}") {
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      edges {
+        cursor
+        node {
+          createdAt
+          updatedAt
+          key
+          name
+          model
+          production
+          origin
+          id
+          price
+          pricePolicy
+          fixedPrice
+          searchKeywords
+          category {
+            key
+            name
+          }
+          content
+          shippingFee
+          shippingType
+          images(size: large) # size는 필수 파라미터입니다.
+          status
+          options {
+            optionAttributes {
+              name
+              value
+            }
+            price
+            quantity
+            key
+          }
+          taxFree
+          adultOnly
+          returnable
+          noReturnReason
+          guaranteedShippingPeriod
+          openmarketSellable
+          boxQuantity
+          attributes
+          closingTime
+          metadata
+        }
+      }
+    }
+  }
+`;
+
+client.open("GET", "https://api-sandbox.ownerclan.com/v1/graphql?query=" + encodeURIComponent(readQuery), true);
+client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+client.onreadystatechange = function (aEvt) {
+    if (client.readyState === 4) {
+        if (client.status === 200) {
+            var response = JSON.parse(client.responseText);
+            if (response.errors) {
+                // API 서버 응답이 정상이지만 API 에러가 있다면 에러를 콘솔에 씁니다.
+                console.error(JSON.stringify(response.errors));
+            } else {
+                // API 서버 응답도 정상이고, API 에러도 없다면 반환된 데이터를 콘솔에 씁니다.
+                console.log(JSON.stringify(response.data));
+            }
+        } else {
+            // API 서버 응답이 정상이 아닌 경우 에러와 HTTP status code를 콘솔에 씁니다.
+            console.error(client.status, client.responseText);
+        }
+    }
+}
+
+client.send(null);
+
+단일 1:1 문의 게시판 글 조회 API
+단일 1:1 문의 게시판 글을 조회합니다. 특정 글의 key를 통해 해당 글의 상세 정보를 조회할 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 정보를 조회할 1:1 문의 게시판 글의 key입니다.
+반환 데이터
+1:1 문의 게시판 글의 정보를 반환하며, 다음 정보를 포함합니다:
+
+key (String): 1:1 문의 게시판 글의 key입니다.
+id (String): 1:1 문의 게시판 글의 API ID입니다.
+type (SellerQnaType): 문의글 타입입니다.
+isSecret (Boolean): 비밀글 여부입니다.
+title (String): 글 제목입니다.
+content (String): 글 내용입니다.
+files ([String]): 첨부파일의 URL 리스트입니다.
+relatedItemKey (String): 연관 상품의 상품코드입니다.
+relatedOrderKey (String): 연관 주문의 주문코드입니다.
+createdAt (Timestamp): 등록 시각입니다.
+recipientName (String): 주문자의 이름입니다.
+comments ([String]): 달린 댓글 목록입니다.
+subArticles ([SellerQnaArticle]): 하위 글 목록입니다.
+
+ /**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행할 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query SellerQnaArticle($key: ID!) { 
+            sellerQnaArticle(key: $key) { 
+                key 
+                id 
+                type 
+                isSecret 
+                title 
+                content 
+                files 
+                relatedItemKey 
+                relatedOrderKey 
+                recipientName 
+                createdAt 
+                comments 
+                subArticles { 
+                    key 
+                    id 
+                    type 
+                    isSecret 
+                    title 
+                    content 
+                    files 
+                    relatedItemKey 
+                    relatedOrderKey 
+                    recipientName 
+                    createdAt 
+                    comments 
+                } 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query,
+            variables: {
+                key: "1000000"
+            }
+        }));
+
+복수의 1:1 문의 게시판 글 조회 API
+복수의 1:1 문의 게시판 글 목록을 조회합니다. 검색 조건을 설정한 경우, 조건에 맞는 게시판 글만 조회됩니다.
+
+숨기기
+예제 코드
+파라미터
+Pagination 관련 파라미터:
+
+after (String): cursor 값 이후의 글을 불러옵니다.
+before (String): cursor 값 이전의 글을 불러옵니다.
+first (Int): 처음 몇 개의 글을 불러올지를 나타냅니다.
+last (Int): 마지막 몇 개의 글을 불러올지를 나타냅니다.
+Search 관련 파라미터:
+
+search ([SellerQnaSearch]): 텍스트 검색 조건입니다.
+type (SellerQnaType): 문의글 타입으로 필터링합니다.
+receiverName (String): 주문자 이름으로 검색합니다.
+dateFrom (Timestamp): 글이 등록된 날짜 필터링입니다.
+dateTo (Timestamp): 글이 등록된 날짜 필터링입니다.
+
+/**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행할 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query AllSellerQnaArticles { 
+            allSellerQnaArticles() { 
+                pageInfo { 
+                    hasNextPage 
+                    hasPreviousPage 
+                    startCursor 
+                    endCursor 
+                } 
+                edges { 
+                    cursor 
+                    node { 
+                        key 
+                        id 
+                        type 
+                        isSecret 
+                        title 
+                        content 
+                        files 
+                        relatedItemKey 
+                        relatedOrderKey 
+                        recipientName 
+                        createdAt 
+                        comments 
+                        subArticles { 
+                            key 
+                            id 
+                            type 
+                            isSecret 
+                            title 
+                            content 
+                            files 
+                            relatedItemKey 
+                            relatedOrderKey 
+                            recipientName 
+                            createdAt 
+                            comments 
+                        } 
+                    } 
+                } 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+
+단일 긴급 메시지 조회 API
+단일 긴급 메시지를 조회합니다. 특정 key로 조회할 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 조회할 긴급 메시지의 key입니다.
+반환 데이터
+key (String): 긴급 메시지의 key입니다.
+id (String): 긴급 메시지의 API ID입니다.
+createdAt (Timestamp): 등록 시각입니다.
+type (EmergencyMessageType): 메시지 타입입니다.
+itemKey (String): 관련 상품의 상품코드입니다.
+content (String): 메시지 내용입니다.
+url (String): 관련 URL입니다.
+penalty (Int): 페널티 점수입니다.
+status (EmergencyMessageStatus): 상태 정보입니다.
+repliedAt (Timestamp): 답변 시각입니다.
+reply (String): 답변 내용입니다.
+
+/**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행할 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query EmergencyMessage($key: ID!) { 
+            emergencyMessage(key: $key) { 
+                key 
+                id 
+                createdAt 
+                type 
+                itemKey 
+                content 
+                url 
+                penalty 
+                status 
+                repliedAt 
+                reply 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query,
+            variables: {
+                key: "12345"
+            }
+        }));
+
+복수의 긴급 메시지 조회 API
+복수의 긴급 메시지 목록을 조회합니다. 검색 조건을 설정하면 해당 조건에 맞는 긴급 메시지들만 조회됩니다.
+
+숨기기
+예제 코드
+파라미터
+Pagination 관련 파라미터:
+
+after (String): cursor 값 이후의 긴급 메시지들을 불러옵니다.
+before (String): cursor 값 이전의 긴급 메시지들을 불러옵니다.
+first (Int): 처음 몇 개의 긴급 메시지를 불러올지를 나타냅니다.
+last (Int): 마지막 몇 개의 긴급 메시지를 불러올지를 나타냅니다.
+Search 관련 파라미터:
+
+status (EmergencyMessageStatus): 상태로 필터링합니다.
+
+/**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행할 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query AllEmergencyMessages { 
+            allEmergencyMessages() { 
+                pageInfo { 
+                    hasNextPage 
+                    hasPreviousPage 
+                    startCursor 
+                    endCursor 
+                } 
+                edges { 
+                    cursor 
+                    node { 
+                        key 
+                        id 
+                        createdAt 
+                        type 
+                        itemKey 
+                        content 
+                        url 
+                        penalty 
+                        status 
+                        repliedAt 
+                        reply 
+                    } 
+                } 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+
+단일 알림 메모 조회 API
+단일 알림 메모를 조회합니다. 특정 key로 조회할 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 조회할 알림 메모의 key입니다.
+반환 데이터
+key (String): 알림 메모의 key입니다.
+id (String): 알림 메모의 API ID입니다.
+createdAt (Timestamp): 등록 시각입니다.
+type (NoticeType): 알림 메모 타입입니다.
+content (String): 메모 내용입니다.
+relatedItemKeys ([String]): 연관 상품 코드 리스트입니다.
+relatedOrderKeys ([String]): 연관 주문 코드 리스트입니다.
+checkedAt (Timestamp): 확인 시각입니다.
+
+ /**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행할 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query Notice($key: ID!) { 
+            notice(key: $key) { 
+                key 
+                id 
+                createdAt 
+                type 
+                content 
+                relatedItemKeys 
+                relatedOrderKeys 
+                checkedAt 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query,
+            variables: {
+                key: "54321"
+            }
+        }));
+
+복수의 알림 메모 조회 API
+복수의 알림 메모 목록을 조회합니다. 검색 조건을 설정한 경우 해당 조건에 맞는 메모들만 조회됩니다.
+
+숨기기
+예제 코드
+파라미터
+Pagination 관련 파라미터:
+
+after (String): cursor 값 이후의 알림 메모들을 불러옵니다.
+before (String): cursor 값 이전의 알림 메모들을 불러옵니다.
+first (Int): 처음 몇 개의 알림 메모를 불러올지를 나타냅니다.
+last (Int): 마지막 몇 개의 알림 메모를 불러올지를 나타냅니다.
+Search 관련 파라미터:
+
+type (NoticeType): 상태로 필터링합니다.
+checked (Boolean): 확인 여부로 필터링합니다.
+
+  /**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행할 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query AllNotices { 
+            allNotices() { 
+                pageInfo { 
+                    hasNextPage 
+                    hasPreviousPage 
+                    startCursor 
+                    endCursor 
+                } 
+                edges { 
+                    cursor 
+                    node { 
+                        key 
+                        id 
+                        createdAt 
+                        type 
+                        content 
+                        relatedItemKeys 
+                        relatedOrderKeys 
+                        checkedAt 
+                    } 
+                } 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+
+판매사 1:1 문의 글 작성 API
+판매사 1:1 문의 게시판에 글을 작성합니다.
+
+숨기기
+예제 코드
+파라미터
+input (SellerQnaArticleInput): 입력할 데이터입니다.
+입력 데이터
+type (SellerQnaType): 문의 글 타입입니다. 가능한 값은 SellerQnaType을 참고하십시오.
+title (String): 글 제목입니다.
+content (String): 문의 내용입니다.
+files ([Upload]): 첨부파일 리스트입니다. 사용 방법은 아래 예제(example2 - 파일 업로드)를 참고하십시오.
+relatedItemKey (String): 연관 상품이 있는 경우 상품의 key입니다.
+relatedOrderKey (String): 연관 주문이 있는 경우 주문의 key입니다.
+
+ /**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `mutation CreateSellerQnaArticle($input: SellerQnaArticleInput!) { 
+            createSellerQnaArticle(input: $input) { 
+                id 
+                key 
+                type 
+                isSecret 
+                title 
+                content 
+                files 
+                relatedItemKey 
+                relatedOrderKey 
+                createdAt 
+                recipientName 
+                subArticles { 
+                    id 
+                    key 
+                    type 
+                    isSecret 
+                    title 
+                    content 
+                    files 
+                    relatedItemKey 
+                    relatedOrderKey 
+                    createdAt 
+                    recipientName 
+                    comments 
+                } 
+                parentArticles { 
+                    id 
+                    key 
+                    type 
+                    isSecret 
+                    title 
+                    content 
+                    files 
+                    relatedItemKey 
+                    relatedOrderKey 
+                    createdAt 
+                    recipientName 
+                    comments 
+                } 
+                comments 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query,
+            variables: {
+                input: {
+                    type: "item",
+                    title: "제목",
+                    content: "문의 내용",
+                    files: [null],  // 첨부파일이 없을 경우 null로 설정
+                    relatedItemKey: "W999999"
+                }
+            }
+        }));
+
+주문 상품 반품/교환 신청 API
+주문한 상품에 대해 반품 또는 교환 신청을 처리합니다.
+
+숨기기
+예제 코드
+파라미터
+key (String): 반품/교환을 요청할 주문의 KEY입니다.
+input (RefundExchangeOrderInput): 입력할 데이터입니다.
+입력 데이터
+productStatus (ProductStatusType): 상품의 상태입니다. ProductStatusType 값을 참고하십시오.
+reason (RefundOrExchangeReasonType): 반품 또는 교환 사유입니다. RefundOrExchangeReasonType 값을 참고하십시오.
+detailedReason (DetailedReasonInput): 반품 또는 교환의 상세 사유입니다.
+shippingFeePayment (ShippingFeePaymentType): 반품 배송비 부과 타입입니다.
+refundAddress (RefundAddressInput): 반품 주소입니다.
+refundTrackingInfo (RefundTrackingInfoInput): 반품 택배 정보입니다.
+content (String): 공급사에 전달할 내용입니다.
+files ([Upload]): 첨부파일 리스트입니다.
+반환 데이터
+업데이트된 주문 정보를 반환합니다. 반환되는 데이터는 order 쿼리의 결과와 동일합니다.
+
+ /**
+        * 아래 예제는 인터넷 브라우저의 콘솔 창에서 실행해볼 수 있습니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `mutation RequestRefundOrExchange($key: ID!, $input: RefundExchangeOrderInput!) { 
+            requestRefundOrExchange(key: $key, input: $input) { 
+                key 
+                id 
+                products { 
+                    quantity 
+                    price 
+                    shippingType 
+                    itemKey 
+                    productName 
+                    itemOptionInfo { 
+                        optionAttributes { 
+                            name 
+                            value 
+                        } 
+                        price 
+                    } 
+                    trackingNumber 
+                    shippingCompanyCode 
+                    shippingCompanyName 
+                    shippedDate 
+                    additionalAttributes { 
+                        key 
+                        value 
+                    } 
+                    taxFree 
+                } 
+                status 
+                shippingInfo { 
+                    sender { 
+                        name 
+                        phoneNumber 
+                        email 
+                    } 
+                    recipient { 
+                        name 
+                        phoneNumber 
+                        destinationAddress { 
+                            addr1 
+                            addr2 
+                            postalCode 
+                        } 
+                    } 
+                    shippingFee 
+                } 
+                createdAt 
+                updatedAt 
+                note 
+                ordererNote 
+                sellerNote 
+                isBeingMediated 
+                adjustments { 
+                    reason 
+                    price 
+                    taxFree 
+                } 
+                transactions { 
+                    key 
+                    id 
+                    kind 
+                    status 
+                    amount { 
+                        currency 
+                        value 
+                    } 
+                    createdAt 
+                    updatedAt 
+                    closedAt 
+                    note 
+                } 
+                refundDetails { 
+                    status 
+                    productStatus 
+                    reason 
+                    detailedReason { 
+                        refundType 
+                        detail 
+                        explanation 
+                    } 
+                    shippingFeePayment 
+                    returnCriteria 
+                    refundAddress { 
+                        refundAddressType 
+                        address 
+                    } 
+                    refundTrackingInfo { 
+                        shippingCompanyCode 
+                        trackingNumber 
+                    } 
+                    content 
+                } 
+            } 
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query,
+            variables: {
+                key: "2020000000000000000A",
+                input: {
+                    productStatus: "Unopened",
+                    reason: "DamagedItem",
+                    detailedReason: {
+                        refundType: "Reship",
+                        detail: "상세 내용.",
+                        explanation: "기타 정보."
+                    },
+                    shippingFeePayment: "CollectedOnDelivery",
+                    refundAddress: {
+                        refundAddressType: "ManuallyProvided",
+                        address: "서울특별시"
+                    },
+                    refundTrackingInfo: {
+                        shippingCompanyCode: "1",
+                        trackingNumber: "12345678910"
+                    },
+                    content: "공급사에 전달할 내용."
+                }
+            }
+        }));
+
+카테고리 API
+단일 카테고리 정보 조회 API
+오너클랜의 단일 카테고리 정보를 조회합니다.
+모든 최상위 카테고리의 상위 카테고리는 "ROOT"라는 이름을 가지며, 코드는 "00000000"입니다.
+이를 이용해 최상위 카테고리만 전부 가져오거나, 모든 카테고리를 가져올 수 있습니다.
+
+숨기기
+예제 코드
+파라미터
+key (ID): 조회할 카테고리의 key입니다. 오너클랜 카테고리 코드와 동일한 문자열입니다.
+반환 데이터
+key (String): 카테고리의 오너클랜 코드입니다.
+id (String): 카테고리의 API ID입니다.
+name (String): 카테고리의 이름입니다.
+fullName (String): 카테고리의 전체 이름입니다. 상위 카테고리까지 포함된 이름입니다.
+attributes ([String]): 카테고리 속성 정보입니다.
+parent (Category): 상위 카테고리입니다. (key, id, name을 조회 가능)
+children ([Category]): 하위 카테고리 목록입니다. (key, id, name을 조회 가능)
+ancestors ([Category]): 상위 카테고리 전체 목록입니다. (key, id, name을 조회 가능)
+descendants (CategoriesConnection): 하위 카테고리 전체 목록과 pagination 정보를 포함합니다.
+Pagination 관련 파라미터
+after (String): 해당 cursor 값 이후의 카테고리만 불러옵니다.
+before (String): 해당 cursor 값 이전의 카테고리만 불러옵니다.
+first (Int): 처음 몇 개의 카테고리를 불러올지 설정합니다.
+last (Int): 마지막 몇 개의 카테고리를 불러올지 설정합니다.
+
+/**
+        * 단일 카테고리를 조회하는 예제 쿼리입니다.
+        */
+        
+        var client = new XMLHttpRequest();
+        var query = `query {
+          category(key: "50000108") {
+            key
+            name
+            parent {
+              key
+              name
+              parent {
+                key
+                name
+              }
+            }
+            children {
+              key
+              name
+            }
+            ancestors {
+              key
+              name
+            }
+            descendants(first: 100) {
+              pageInfo {
+                hasNextPage
+                hasPreviousPage
+                startCursor
+                endCursor
+              }
+              edges {
+                cursor
+                node {
+                  key
+                  name
+                }
+              }
+            }
+          }
+        }`;
+        
+        client.open("POST", "https://api-sandbox.ownerclan.com/v1/graphql", true);
+        client.setRequestHeader("Content-Type", "application/json");
+        client.setRequestHeader("Authorization", "Bearer YOUR_TOKEN");
+        
+        client.onreadystatechange = function () {
+            if (client.readyState === 4 && client.status === 200) {
+                console.log(client.responseText);
+            }
+        };
+        
+        client.send(JSON.stringify({
+            query: query
+        }));
+

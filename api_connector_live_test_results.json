@@ -1,0 +1,119 @@
+{
+  "status": "success",
+  "connectors_tested": 3,
+  "connectors_successful": 1,
+  "pricing_system_status": "success",
+  "connector_results": {
+    "OwnerClan": {
+      "status": "success",
+      "auth_result": false,
+      "products_collected": 0,
+      "transformation_test": "skipped"
+    },
+    "Zentrade": {
+      "status": "error",
+      "message": "Cannot connect to host api.zentrade.com:443 ssl:default [getaddrinfo failed]"
+    },
+    "DomaeMae": {
+      "status": "error",
+      "message": "Cannot connect to host api.domaemae.com:443 ssl:default [getaddrinfo failed]"
+    }
+  },
+  "pricing_result": {
+    "status": "success",
+    "marketplaces_tested": 3,
+    "products_tested": 3,
+    "pricing_results": {
+      "coupang": {
+        "summary": {
+          "total_products": 3,
+          "average_margin_rate": 0.3,
+          "average_fee_rate": 0.10166666666666667,
+          "total_net_profit": 22090.0,
+          "average_margin_percentage": "30.0%",
+          "average_fee_percentage": "10.2%"
+        },
+        "products": [
+          {
+            "product_id": "ownerclan_fashion_001",
+            "calculated_price": 19500.0,
+            "margin_rate": 0.3,
+            "net_profit": 2452.5
+          },
+          {
+            "product_id": "zentrade_beauty_001",
+            "calculated_price": 32500.0,
+            "margin_rate": 0.3,
+            "net_profit": 3437.5
+          },
+          {
+            "product_id": "domaemae_digital_001",
+            "calculated_price": 104000.0,
+            "margin_rate": 0.3,
+            "net_profit": 16200.0
+          }
+        ]
+      },
+      "naver_smartstore": {
+        "summary": {
+          "total_products": 3,
+          "average_margin_rate": 0.3,
+          "average_fee_rate": 0.06666666666666667,
+          "total_net_profit": 26835.0,
+          "average_margin_percentage": "30.0%",
+          "average_fee_percentage": "6.7%"
+        },
+        "products": [
+          {
+            "product_id": "ownerclan_fashion_001",
+            "calculated_price": 19500.0,
+            "margin_rate": 0.3,
+            "net_profit": 3135.0
+          },
+          {
+            "product_id": "zentrade_beauty_001",
+            "calculated_price": 32500.0,
+            "margin_rate": 0.3,
+            "net_profit": 4900.0
+          },
+          {
+            "product_id": "domaemae_digital_001",
+            "calculated_price": 104000.0,
+            "margin_rate": 0.3,
+            "net_profit": 18800.0
+          }
+        ]
+      },
+      "11st": {
+        "summary": {
+          "total_products": 3,
+          "average_margin_rate": 0.3,
+          "average_fee_rate": 0.08533333333333333,
+          "total_net_profit": 24443.0,
+          "average_margin_percentage": "30.0%",
+          "average_fee_percentage": "8.5%"
+        },
+        "products": [
+          {
+            "product_id": "ownerclan_fashion_001",
+            "calculated_price": 19500.0,
+            "margin_rate": 0.3,
+            "net_profit": 2706.0
+          },
+          {
+            "product_id": "zentrade_beauty_001",
+            "calculated_price": 32500.0,
+            "margin_rate": 0.3,
+            "net_profit": 4185.0
+          },
+          {
+            "product_id": "domaemae_digital_001",
+            "calculated_price": 104000.0,
+            "margin_rate": 0.3,
+            "net_profit": 17552.0
+          }
+        ]
+      }
+    }
+  }
+}

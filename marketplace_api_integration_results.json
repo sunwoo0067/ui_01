@@ -1,0 +1,58 @@
+{
+  "authentication": {
+    "coupang": true,
+    "naver_smartstore": true
+  },
+  "upload": {
+    "coupang": {
+      "success": true,
+      "product_id": "coupang_test_product_001",
+      "marketplace_product_id": "CP_test_product_001",
+      "status": "pending_review",
+      "uploaded_at": "2025-10-06T04:46:50.405575",
+      "message": "상품이 성공적으로 업로드되었습니다"
+    },
+    "naver_smartstore": {
+      "success": true,
+      "product_id": "naver_test_product_001",
+      "marketplace_product_id": "NV_test_product_001",
+      "status": "active",
+      "uploaded_at": "2025-10-06T04:46:50.405575",
+      "message": "상품이 성공적으로 업로드되었습니다"
+    }
+  },
+  "sync": {
+    "coupang": {
+      "success": true,
+      "total_products": 2,
+      "synced_products": 2,
+      "failed_products": 0,
+      "synced_at": "2025-10-06T04:46:50.406095"
+    },
+    "naver_smartstore": {
+      "success": true,
+      "total_products": 2,
+      "synced_products": 2,
+      "failed_products": 0,
+      "synced_at": "2025-10-06T04:46:50.406095"
+    }
+  },
+  "status": {
+    "coupang": {
+      "product_id": "test_product_001",
+      "status": "active",
+      "visibility": "visible",
+      "last_updated": "2025-10-06T04:46:50.406095",
+      "reviews_count": 0,
+      "sales_count": 0
+    },
+    "naver_smartstore": {
+      "product_id": "test_product_001",
+      "status": "active",
+      "visibility": "visible",
+      "last_updated": "2025-10-06T04:46:50.406095",
+      "reviews_count": 0,
+      "sales_count": 0
+    }
+  }
+}

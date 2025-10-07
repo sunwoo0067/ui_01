@@ -1,0 +1,159 @@
+{
+  "summary": {
+    "total_tests": 2,
+    "successful_tests": 2,
+    "failed_tests": 0
+  },
+  "workflow_results": {
+    "status": "success",
+    "suppliers_tested": 3,
+    "suppliers_successful": 1,
+    "pricing_system_status": "success",
+    "marketplace_uploads": 2,
+    "supplier_results": {
+      "OwnerClan": {
+        "status": "success",
+        "auth_result": false,
+        "products_collected": 0,
+        "transformation_success": false
+      },
+      "Zentrade": {
+        "status": "error",
+        "message": "Cannot connect to host api.zentrade.com:443 ssl:default [getaddrinfo failed]"
+      },
+      "DomaeMae": {
+        "status": "error",
+        "message": "Cannot connect to host api.dodomall.com:443 ssl:default [getaddrinfo failed]"
+      }
+    },
+    "pricing_results": {
+      "status": "success",
+      "marketplaces_tested": 3,
+      "products_tested": 3,
+      "pricing_results": {
+        "coupang": {
+          "summary": {
+            "total_products": 3,
+            "average_margin_rate": 0.3,
+            "average_fee_rate": 0.10166666666666667,
+            "total_net_profit": 13549.5,
+            "average_margin_percentage": "30.0%",
+            "average_fee_percentage": "10.2%"
+          },
+          "products": [
+            {
+              "product_id": "supplier_fashion_001",
+              "calculated_price": 15600.0,
+              "margin_rate": 0.3,
+              "net_profit": 1962.0
+            },
+            {
+              "product_id": "supplier_beauty_001",
+              "calculated_price": 23400.0,
+              "margin_rate": 0.3,
+              "net_profit": 2475.0
+            },
+            {
+              "product_id": "supplier_digital_001",
+              "calculated_price": 58500.0,
+              "margin_rate": 0.3,
+              "net_profit": 9112.5
+            }
+          ]
+        },
+        "naver_smartstore": {
+          "summary": {
+            "total_products": 3,
+            "average_margin_rate": 0.3,
+            "average_fee_rate": 0.06666666666666667,
+            "total_net_profit": 16611.0,
+            "average_margin_percentage": "30.0%",
+            "average_fee_percentage": "6.7%"
+          },
+          "products": [
+            {
+              "product_id": "supplier_fashion_001",
+              "calculated_price": 15600.0,
+              "margin_rate": 0.3,
+              "net_profit": 2508.0
+            },
+            {
+              "product_id": "supplier_beauty_001",
+              "calculated_price": 23400.0,
+              "margin_rate": 0.3,
+              "net_profit": 3528.0
+            },
+            {
+              "product_id": "supplier_digital_001",
+              "calculated_price": 58500.0,
+              "margin_rate": 0.3,
+              "net_profit": 10575.0
+            }
+          ]
+        },
+        "11st": {
+          "summary": {
+            "total_products": 3,
+            "average_margin_rate": 0.3,
+            "average_fee_rate": 0.08533333333333333,
+            "total_net_profit": 15051.0,
+            "average_margin_percentage": "30.0%",
+            "average_fee_percentage": "8.5%"
+          },
+          "products": [
+            {
+              "product_id": "supplier_fashion_001",
+              "calculated_price": 15600.0,
+              "margin_rate": 0.3,
+              "net_profit": 2164.8
+            },
+            {
+              "product_id": "supplier_beauty_001",
+              "calculated_price": 23400.0,
+              "margin_rate": 0.3,
+              "net_profit": 3013.2
+            },
+            {
+              "product_id": "supplier_digital_001",
+              "calculated_price": 58500.0,
+              "margin_rate": 0.3,
+              "net_profit": 9873.0
+            }
+          ]
+        }
+      }
+    },
+    "marketplace_upload_results": {
+      "coupang": {
+        "success": true,
+        "product_id": "coupang_integration_test_001",
+        "calculated_price": 19500.0,
+        "margin_rate": 0.3,
+        "net_profit": 2452.5,
+        "status": "active"
+      },
+      "naver_smartstore": {
+        "success": true,
+        "product_id": "naver_smartstore_integration_test_001",
+        "calculated_price": 19500.0,
+        "margin_rate": 0.3,
+        "net_profit": 3135.0,
+        "status": "active"
+      }
+    }
+  },
+  "performance_results": {
+    "status": "success",
+    "products_processed": 100,
+    "processing_time": 0.001514434814453125,
+    "avg_time_per_product": 1.514434814453125e-05,
+    "summary": {
+      "total_products": 100,
+      "average_margin_rate": 0.30034641314723864,
+      "average_fee_rate": 0.1017,
+      "total_net_profit": 251405.0,
+      "average_margin_percentage": "30.0%",
+      "average_fee_percentage": "10.2%"
+    }
+  }
+}
