@@ -110,10 +110,10 @@ class AIPricePredictionService:
                 {"category": category} if category else {}
             )
             
-            # 가격 히스토리 데이터 조회
+            # 가격 히스토리 데이터 조회 (category 컬럼이 없으므로 전체 조회)
             price_history = await self.db_service.select_data(
                 "price_history",
-                {"category": category} if category else {}
+                {}
             )
             
             if not competitor_data:
