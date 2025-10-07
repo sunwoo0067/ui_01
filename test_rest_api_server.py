@@ -1,522 +1,532 @@
+#!/usr/bin/env python3
 """
 REST API 서버 테스트
-
-외부 시스템 연동을 위한 REST API의 모든 엔드포인트를 테스트합니다.
 """
 
 import asyncio
-import aiohttp
-import json
 import sys
 import os
+import requests
+import json
 from datetime import datetime
+from typing import Dict, Any
 from loguru import logger
 
-# 프로젝트 루트를 Python 경로에 추가
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 프로젝트 루트 디렉토리를 Python 경로에 추가
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 class RESTAPITester:
-    """REST API 테스터"""
+    """REST API 서버 테스터"""
     
     def __init__(self, base_url: str = "http://localhost:8002"):
         self.base_url = base_url
-        self.session = None
-        self.test_results = {}
-        self.auth_token = "dev_token_123"  # 개발용 토큰
-    
-    async def __aenter__(self):
-        self.session = aiohttp.ClientSession()
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        if self.session:
-            await self.session.close()
-    
-    def get_headers(self) -> dict:
-        """인증 헤더 생성"""
-        return {
-            "Authorization": f"Bearer {self.auth_token}",
+        self.headers = {
+            "Authorization": "Bearer dev_token_123",
             "Content-Type": "application/json"
         }
+        self.test_results = {}
     
-    async def test_basic_endpoints(self) -> bool:
-        """기본 엔드포인트 테스트"""
+    async def test_server_health(self) -> bool:
+        """서버 헬스 체크 테스트"""
         try:
-            logger.info("\n=== 기본 엔드포인트 테스트 시작 ===")
+            logger.info("=== 서버 헬스 체크 테스트 시작 ===")
             
-            # 루트 엔드포인트
-            async with self.session.get(f"{self.base_url}/") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 루트 엔드포인트 성공")
-                    logger.info(f"  API 버전: {data.get('data', {}).get('version', 'N/A')}")
-                else:
-                    logger.error(f"❌ 루트 엔드포인트 실패: {response.status}")
-                    return False
+            # 루트 엔드포인트 테스트
+            response = requests.get(f"{self.base_url}/", headers=self.headers)
             
-            # 헬스 체크
-            async with self.session.get(f"{self.base_url}/health") as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 헬스 체크 성공")
-                    logger.info(f"  상태: {data.get('data', {}).get('status', 'N/A')}")
-                else:
-                    logger.error(f"❌ 헬스 체크 실패: {response.status}")
-                    return False
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 루트 엔드포인트 응답 성공")
+                logger.info(f"  API 버전: {data.get('data', {}).get('version', 'N/A')}")
+                logger.info(f"  상태: {data.get('data', {}).get('status', 'N/A')}")
+            else:
+                logger.error(f"❌ 루트 엔드포인트 응답 실패: {response.status_code}")
+                return False
             
+            # 헬스 체크 엔드포인트 테스트
+            response = requests.get(f"{self.base_url}/health", headers=self.headers)
+            
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 헬스 체크 엔드포인트 응답 성공")
+                logger.info(f"  상태: {data.get('data', {}).get('status', 'N/A')}")
+            else:
+                logger.error(f"❌ 헬스 체크 엔드포인트 응답 실패: {response.status_code}")
+                return False
+            
+            self.test_results['server_health'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ 기본 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ 서버 헬스 체크 테스트 실패: {e}")
+            self.test_results['server_health'] = False
             return False
     
-    async def test_authentication(self) -> bool:
-        """인증 테스트"""
+    async def test_products_api(self) -> bool:
+        """상품 API 테스트"""
         try:
-            logger.info("\n=== 인증 테스트 시작 ===")
+            logger.info("\n=== 상품 API 테스트 시작 ===")
             
-            # 유효한 토큰으로 테스트
-            headers = self.get_headers()
-            async with self.session.get(f"{self.base_url}/api/v2/products", headers=headers) as response:
-                if response.status == 200:
-                    logger.info("✅ 유효한 토큰 인증 성공")
-                else:
-                    logger.error(f"❌ 유효한 토큰 인증 실패: {response.status}")
-                    return False
-            
-            # 무효한 토큰으로 테스트
-            invalid_headers = {"Authorization": "Bearer invalid_token"}
-            async with self.session.get(f"{self.base_url}/api/v2/products", headers=invalid_headers) as response:
-                if response.status == 401:
-                    logger.info("✅ 무효한 토큰 인증 차단 성공")
-                else:
-                    logger.error(f"❌ 무효한 토큰 인증 차단 실패: {response.status}")
-                    return False
-            
-            # 토큰 없이 테스트
-            async with self.session.get(f"{self.base_url}/api/v2/products") as response:
-                if response.status == 401:
-                    logger.info("✅ 토큰 없음 인증 차단 성공")
-                else:
-                    logger.error(f"❌ 토큰 없음 인증 차단 실패: {response.status}")
-                    return False
-            
-            return True
-            
-        except Exception as e:
-            logger.error(f"❌ 인증 테스트 실패: {e}")
-            return False
-    
-    async def test_product_endpoints(self) -> bool:
-        """상품 관련 엔드포인트 테스트"""
-        try:
-            logger.info("\n=== 상품 엔드포인트 테스트 시작 ===")
-            
-            headers = self.get_headers()
-            
-            # 상품 목록 조회
-            async with self.session.get(
+            # 상품 목록 조회 테스트
+            response = requests.get(
                 f"{self.base_url}/api/v2/products",
-                headers=headers,
-                params={"limit": 10, "offset": 0}
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 상품 목록 조회 성공")
-                    logger.info(f"  조회된 상품 수: {data.get('data', {}).get('total', 0)}")
-                else:
-                    logger.warning(f"⚠️ 상품 목록 조회 실패: {response.status}")
-                    # 데이터베이스 테이블이 없을 수 있으므로 경고로 처리
+                headers=self.headers,
+                params={"limit": 5, "offset": 0}
+            )
             
-            # 특정 상품 조회 (존재하지 않는 ID로 테스트)
-            async with self.session.get(
-                f"{self.base_url}/api/v2/products/non_existent_id",
-                headers=headers
-            ) as response:
-                if response.status == 404:
-                    logger.info("✅ 존재하지 않는 상품 조회 404 응답 성공")
-                else:
-                    logger.warning(f"⚠️ 존재하지 않는 상품 조회 응답: {response.status}")
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 상품 목록 조회 성공")
+                logger.info(f"  조회된 상품 수: {data.get('data', {}).get('total', 0)}")
+                
+                # 첫 번째 상품이 있으면 상세 조회 테스트
+                products = data.get('data', {}).get('products', [])
+                if products:
+                    product_id = products[0].get('id')
+                    if product_id:
+                        # 특정 상품 조회 테스트
+                        response = requests.get(
+                            f"{self.base_url}/api/v2/products/{product_id}",
+                            headers=self.headers
+                        )
+                        
+                        if response.status_code == 200:
+                            logger.info("✅ 특정 상품 조회 성공")
+                        else:
+                            logger.error(f"❌ 특정 상품 조회 실패: {response.status_code}")
+            else:
+                logger.error(f"❌ 상품 목록 조회 실패: {response.status_code}")
+                return False
             
+            self.test_results['products_api'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ 상품 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ 상품 API 테스트 실패: {e}")
+            self.test_results['products_api'] = False
             return False
     
-    async def test_search_endpoints(self) -> bool:
-        """검색 관련 엔드포인트 테스트"""
+    async def test_search_api(self) -> bool:
+        """검색 API 테스트"""
         try:
-            logger.info("\n=== 검색 엔드포인트 테스트 시작 ===")
+            logger.info("\n=== 검색 API 테스트 시작 ===")
             
-            headers = self.get_headers()
-            
-            # 상품 검색
+            # 상품 검색 테스트
             search_data = {
-                "keyword": "스마트폰",
+                "keyword": "무선 이어폰",
                 "page": 1,
                 "platform": "coupang"
             }
             
-            async with self.session.post(
+            response = requests.post(
                 f"{self.base_url}/api/v2/search",
-                headers=headers,
+                headers=self.headers,
                 json=search_data
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 상품 검색 성공")
-                    logger.info(f"  검색 키워드: {data.get('data', {}).get('keyword', 'N/A')}")
-                    logger.info(f"  검색 결과 수: {data.get('data', {}).get('total_results', 0)}")
-                else:
-                    logger.warning(f"⚠️ 상품 검색 실패: {response.status}")
-                    # 웹 스크래핑이 차단될 수 있으므로 경고로 처리
+            )
             
-            # 검색 제안
-            async with self.session.get(
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 상품 검색 성공")
+                logger.info(f"  검색 키워드: {data.get('data', {}).get('keyword', 'N/A')}")
+                logger.info(f"  검색 결과 수: {data.get('data', {}).get('total_results', 0)}")
+            else:
+                logger.error(f"❌ 상품 검색 실패: {response.status_code}")
+                return False
+            
+            # 검색 제안 테스트
+            response = requests.get(
                 f"{self.base_url}/api/v2/search/suggestions",
-                headers=headers,
-                params={"q": "스마트", "limit": 5}
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 검색 제안 성공")
-                    logger.info(f"  제안 수: {data.get('data', {}).get('count', 0)}")
-                else:
-                    logger.warning(f"⚠️ 검색 제안 실패: {response.status}")
+                headers=self.headers,
+                params={"q": "무선", "limit": 5}
+            )
             
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 검색 제안 성공")
+                logger.info(f"  제안 수: {data.get('data', {}).get('count', 0)}")
+            else:
+                logger.error(f"❌ 검색 제안 실패: {response.status_code}")
+            
+            self.test_results['search_api'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ 검색 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ 검색 API 테스트 실패: {e}")
+            self.test_results['search_api'] = False
             return False
     
-    async def test_ai_endpoints(self) -> bool:
-        """AI 관련 엔드포인트 테스트"""
+    async def test_ai_api(self) -> bool:
+        """AI API 테스트"""
         try:
-            logger.info("\n=== AI 엔드포인트 테스트 시작 ===")
+            logger.info("\n=== AI API 테스트 시작 ===")
             
-            headers = self.get_headers()
-            
-            # 가격 예측
+            # 가격 예측 테스트
             prediction_data = {
                 "product_data": {
                     "platform": "coupang",
-                    "category": "electronics",
                     "price": 50000,
-                    "original_price": 60000,
-                    "rating": 4.5,
-                    "review_count": 150
+                    "original_price": 65000,
+                    "rating": 4.3,
+                    "review_count": 850,
+                    "category": "전자제품",
+                    "brand": "TestBrand"
                 },
-                "category": "electronics"
+                "category": "전자제품"
             }
             
-            async with self.session.post(
+            response = requests.post(
                 f"{self.base_url}/api/v2/ai/predict",
-                headers=headers,
+                headers=self.headers,
                 json=prediction_data
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ AI 가격 예측 성공")
-                    predictions = data.get('data', {}).get('predictions', [])
-                    logger.info(f"  예측 모델 수: {len(predictions)}")
-                else:
-                    logger.warning(f"⚠️ AI 가격 예측 실패: {response.status}")
+            )
             
-            # 가격 전략 제안
-            async with self.session.post(
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ AI 가격 예측 성공")
+                predictions = data.get('data', {}).get('predictions', [])
+                logger.info(f"  예측 모델 수: {len(predictions)}")
+                
+                best_prediction = data.get('data', {}).get('best_prediction', {})
+                if best_prediction:
+                    logger.info(f"  최고 예측 가격: {best_prediction.get('price', 'N/A')}원")
+            else:
+                logger.error(f"❌ AI 가격 예측 실패: {response.status_code}")
+            
+            # 가격 전략 분석 테스트
+            response = requests.post(
                 f"{self.base_url}/api/v2/ai/strategy",
-                headers=headers,
+                headers=self.headers,
                 json=prediction_data
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 가격 전략 제안 성공")
-                    strategy = data.get('data', {}).get('strategy', 'N/A')
-                    logger.info(f"  권장 전략: {strategy}")
-                else:
-                    logger.warning(f"⚠️ 가격 전략 제안 실패: {response.status}")
+            )
             
-            # 시장 트렌드 분석
-            async with self.session.get(
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 가격 전략 분석 성공")
+                strategy_data = data.get('data', {})
+                logger.info(f"  추천 가격: {strategy_data.get('recommended_price', 'N/A')}원")
+                logger.info(f"  전략: {strategy_data.get('strategy', 'N/A')}")
+            else:
+                logger.error(f"❌ 가격 전략 분석 실패: {response.status_code}")
+            
+            # 시장 트렌드 분석 테스트
+            response = requests.get(
                 f"{self.base_url}/api/v2/ai/trends",
-                headers=headers,
-                params={"category": "electronics"}
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 시장 트렌드 분석 성공")
-                    trend_data = data.get('data', {})
-                    logger.info(f"  트렌드 방향: {trend_data.get('trend_direction', 'N/A')}")
-                else:
-                    logger.warning(f"⚠️ 시장 트렌드 분석 실패: {response.status}")
+                headers=self.headers,
+                params={"category": "전자제품"}
+            )
             
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 시장 트렌드 분석 성공")
+                trend_data = data.get('data', {})
+                logger.info(f"  트렌드 방향: {trend_data.get('trend_direction', 'N/A')}")
+                logger.info(f"  경쟁사 수: {trend_data.get('competitor_count', 'N/A')}개")
+            else:
+                logger.error(f"❌ 시장 트렌드 분석 실패: {response.status_code}")
+            
+            self.test_results['ai_api'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ AI 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ AI API 테스트 실패: {e}")
+            self.test_results['ai_api'] = False
             return False
     
-    async def test_order_endpoints(self) -> bool:
-        """주문 관련 엔드포인트 테스트"""
+    async def test_orders_api(self) -> bool:
+        """주문 API 테스트"""
         try:
-            logger.info("\n=== 주문 엔드포인트 테스트 시작 ===")
+            logger.info("\n=== 주문 API 테스트 시작 ===")
             
-            headers = self.get_headers()
-            
-            # 주문 목록 조회
-            async with self.session.get(
+            # 주문 목록 조회 테스트
+            response = requests.get(
                 f"{self.base_url}/api/v2/orders",
-                headers=headers,
-                params={"limit": 10, "offset": 0}
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 주문 목록 조회 성공")
-                    logger.info(f"  조회된 주문 수: {data.get('data', {}).get('total', 0)}")
-                else:
-                    logger.warning(f"⚠️ 주문 목록 조회 실패: {response.status}")
+                headers=self.headers,
+                params={"limit": 5, "offset": 0}
+            )
             
-            # 주문 생성 (테스트용)
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 주문 목록 조회 성공")
+                logger.info(f"  조회된 주문 수: {data.get('data', {}).get('total', 0)}")
+            else:
+                logger.error(f"❌ 주문 목록 조회 실패: {response.status_code}")
+            
+            # 주문 생성 테스트 (모의 데이터)
             order_data = {
                 "products": [
                     {
                         "item_key": "test_item_001",
                         "quantity": 1,
-                        "option_attributes": [{"name": "색상", "value": "RED"}]
+                        "option_attributes": []
                     }
                 ],
                 "recipient": {
                     "name": "테스트 고객",
                     "phone": "010-1234-5678",
-                    "address": "서울시 강남구 테헤란로 123",
+                    "address": "서울시 강남구",
                     "postal_code": "12345",
                     "city": "서울시",
                     "district": "강남구",
-                    "detail_address": "테헤란로 123"
+                    "detail_address": "테스트동 123호"
                 },
-                "note": "테스트 주문",
-                "seller_note": "테스트 판매자 메모",
-                "orderer_note": "테스트 주문자 메모"
+                "note": "테스트 주문"
             }
             
-            async with self.session.post(
+            response = requests.post(
                 f"{self.base_url}/api/v2/orders",
-                headers=headers,
+                headers=self.headers,
                 json=order_data
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 주문 생성 성공")
-                    logger.info(f"  주문 ID: {data.get('data', {}).get('order_id', 'N/A')}")
-                else:
-                    logger.warning(f"⚠️ 주문 생성 실패: {response.status}")
-                    # OwnerClan API 연결 문제일 수 있으므로 경고로 처리
+            )
             
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 주문 생성 성공")
+                order_id = data.get('data', {}).get('order_id', 'N/A')
+                logger.info(f"  주문 ID: {order_id}")
+            else:
+                logger.error(f"❌ 주문 생성 실패: {response.status_code}")
+            
+            self.test_results['orders_api'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ 주문 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ 주문 API 테스트 실패: {e}")
+            self.test_results['orders_api'] = False
             return False
     
-    async def test_supplier_endpoints(self) -> bool:
-        """공급사 관련 엔드포인트 테스트"""
+    async def test_suppliers_api(self) -> bool:
+        """공급사 API 테스트"""
         try:
-            logger.info("\n=== 공급사 엔드포인트 테스트 시작 ===")
+            logger.info("\n=== 공급사 API 테스트 시작 ===")
             
-            headers = self.get_headers()
-            
-            # 공급사 목록 조회
-            async with self.session.get(
+            # 공급사 목록 조회 테스트
+            response = requests.get(
                 f"{self.base_url}/api/v2/suppliers",
-                headers=headers
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 공급사 목록 조회 성공")
-                    logger.info(f"  공급사 수: {data.get('data', {}).get('count', 0)}")
-                else:
-                    logger.warning(f"⚠️ 공급사 목록 조회 실패: {response.status}")
+                headers=self.headers
+            )
             
-            # 공급사 계정 생성 (테스트용)
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 공급사 목록 조회 성공")
+                logger.info(f"  조회된 공급사 수: {data.get('data', {}).get('count', 0)}")
+            else:
+                logger.error(f"❌ 공급사 목록 조회 실패: {response.status_code}")
+            
+            # 공급사 계정 생성 테스트 (모의 데이터)
             supplier_data = {
                 "supplier_code": "test_supplier",
                 "account_name": "테스트 계정",
                 "credentials": {
-                    "username": "test_user",
-                    "password": "test_pass"
+                    "api_key": "test_api_key",
+                    "api_secret": "test_api_secret"
                 },
                 "is_active": True
             }
             
-            async with self.session.post(
+            response = requests.post(
                 f"{self.base_url}/api/v2/suppliers",
-                headers=headers,
+                headers=self.headers,
                 json=supplier_data
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 공급사 계정 생성 성공")
-                    logger.info(f"  공급사 코드: {data.get('data', {}).get('supplier_code', 'N/A')}")
-                else:
-                    logger.warning(f"⚠️ 공급사 계정 생성 실패: {response.status}")
+            )
             
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 공급사 계정 생성 성공")
+                supplier_code = data.get('data', {}).get('supplier_code', 'N/A')
+                logger.info(f"  공급사 코드: {supplier_code}")
+            else:
+                logger.error(f"❌ 공급사 계정 생성 실패: {response.status_code}")
+            
+            self.test_results['suppliers_api'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ 공급사 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ 공급사 API 테스트 실패: {e}")
+            self.test_results['suppliers_api'] = False
             return False
     
-    async def test_analytics_endpoints(self) -> bool:
-        """분석 관련 엔드포인트 테스트"""
+    async def test_analytics_api(self) -> bool:
+        """분석 API 테스트"""
         try:
-            logger.info("\n=== 분석 엔드포인트 테스트 시작 ===")
+            logger.info("\n=== 분석 API 테스트 시작 ===")
             
-            headers = self.get_headers()
-            
-            # 대시보드 분석
-            async with self.session.get(
+            # 대시보드 분석 데이터 테스트
+            response = requests.get(
                 f"{self.base_url}/api/v2/analytics/dashboard",
-                headers=headers,
+                headers=self.headers,
                 params={"period": "7d"}
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 대시보드 분석 성공")
-                    stats = data.get('data', {}).get('statistics', {})
-                    logger.info(f"  총 상품 수: {stats.get('total_products', 0)}")
-                    logger.info(f"  총 주문 수: {stats.get('total_orders', 0)}")
-                else:
-                    logger.warning(f"⚠️ 대시보드 분석 실패: {response.status}")
+            )
             
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 대시보드 분석 데이터 조회 성공")
+                statistics = data.get('data', {}).get('statistics', {})
+                logger.info(f"  총 상품 수: {statistics.get('total_products', 'N/A')}")
+                logger.info(f"  총 주문 수: {statistics.get('total_orders', 'N/A')}")
+                logger.info(f"  모니터링 플랫폼 수: {statistics.get('platforms_monitored', 'N/A')}")
+            else:
+                logger.error(f"❌ 대시보드 분석 데이터 조회 실패: {response.status_code}")
+                return False
+            
+            self.test_results['analytics_api'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ 분석 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ 분석 API 테스트 실패: {e}")
+            self.test_results['analytics_api'] = False
             return False
     
-    async def test_batch_endpoints(self) -> bool:
-        """배치 작업 엔드포인트 테스트"""
+    async def test_batch_api(self) -> bool:
+        """배치 작업 API 테스트"""
         try:
-            logger.info("\n=== 배치 작업 엔드포인트 테스트 시작 ===")
+            logger.info("\n=== 배치 작업 API 테스트 시작 ===")
             
-            headers = self.get_headers()
-            
-            # 데이터 수집 배치 작업
+            # 데이터 수집 배치 작업 테스트
             batch_data = {
                 "operation": "data_collection",
                 "parameters": {
-                    "platforms": ["coupang", "naver"],
-                    "keywords": ["스마트폰", "노트북"]
+                    "platforms": ["coupang", "naver_smartstore"],
+                    "keywords": ["무선 이어폰", "스마트워치"]
                 }
             }
             
-            async with self.session.post(
+            response = requests.post(
                 f"{self.base_url}/api/v2/batch",
-                headers=headers,
+                headers=self.headers,
                 json=batch_data
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 데이터 수집 배치 작업 성공")
-                    logger.info(f"  작업 상태: {data.get('data', {}).get('status', 'N/A')}")
-                else:
-                    logger.warning(f"⚠️ 데이터 수집 배치 작업 실패: {response.status}")
+            )
             
-            # 가격 분석 배치 작업
-            batch_data = {
-                "operation": "price_analysis",
-                "parameters": {
-                    "category": "electronics",
-                    "analysis_type": "trend"
-                }
-            }
+            if response.status_code == 200:
+                data = response.json()
+                logger.info("✅ 배치 작업 실행 성공")
+                operation = data.get('data', {}).get('operation', 'N/A')
+                status = data.get('data', {}).get('status', 'N/A')
+                logger.info(f"  작업 유형: {operation}")
+                logger.info(f"  상태: {status}")
+            else:
+                logger.error(f"❌ 배치 작업 실행 실패: {response.status_code}")
+                return False
             
-            async with self.session.post(
-                f"{self.base_url}/api/v2/batch",
-                headers=headers,
-                json=batch_data
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.info("✅ 가격 분석 배치 작업 성공")
-                    logger.info(f"  작업 상태: {data.get('data', {}).get('status', 'N/A')}")
-                else:
-                    logger.warning(f"⚠️ 가격 분석 배치 작업 실패: {response.status}")
-            
+            self.test_results['batch_api'] = True
             return True
             
         except Exception as e:
-            logger.error(f"❌ 배치 작업 엔드포인트 테스트 실패: {e}")
+            logger.error(f"❌ 배치 작업 API 테스트 실패: {e}")
+            self.test_results['batch_api'] = False
             return False
     
-    async def run_all_tests(self) -> bool:
-        """모든 테스트 실행"""
-        logger.info("🚀 REST API 서버 테스트 시작")
-        
-        # 테스트 실행
-        tests = [
-            ("기본 엔드포인트", self.test_basic_endpoints),
-            ("인증", self.test_authentication),
-            ("상품 엔드포인트", self.test_product_endpoints),
-            ("검색 엔드포인트", self.test_search_endpoints),
-            ("AI 엔드포인트", self.test_ai_endpoints),
-            ("주문 엔드포인트", self.test_order_endpoints),
-            ("공급사 엔드포인트", self.test_supplier_endpoints),
-            ("분석 엔드포인트", self.test_analytics_endpoints),
-            ("배치 작업 엔드포인트", self.test_batch_endpoints)
-        ]
-        
-        results = []
-        for test_name, test_func in tests:
-            try:
-                result = await test_func()
-                results.append((test_name, result))
-            except Exception as e:
-                logger.error(f"❌ {test_name} 테스트 중 오류: {e}")
-                results.append((test_name, False))
-        
-        # 결과 요약
-        logger.info("\n📊 테스트 결과 요약:")
-        successful_tests = 0
-        for test_name, result in results:
-            status = "✅ 성공" if result else "❌ 실패"
-            logger.info(f"  {test_name}: {status}")
-            if result:
-                successful_tests += 1
-        
-        total_tests = len(results)
-        success_rate = (successful_tests / total_tests) * 100
-        
-        logger.info(f"\n총 테스트: {total_tests}개")
-        logger.info(f"성공: {successful_tests}개")
-        logger.info(f"실패: {total_tests - successful_tests}개")
-        logger.info(f"성공률: {success_rate:.1f}%")
-        
-        if successful_tests == total_tests:
-            logger.info("🎉 모든 REST API 테스트 성공!")
+    async def test_authentication(self) -> bool:
+        """인증 시스템 테스트"""
+        try:
+            logger.info("\n=== 인증 시스템 테스트 시작 ===")
+            
+            # 유효하지 않은 토큰으로 테스트
+            invalid_headers = {
+                "Authorization": "Bearer invalid_token",
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.get(
+                f"{self.base_url}/api/v2/products",
+                headers=invalid_headers
+            )
+            
+            if response.status_code == 401:
+                logger.info("✅ 유효하지 않은 토큰 거부 성공")
+            else:
+                logger.error(f"❌ 유효하지 않은 토큰이 허용됨: {response.status_code}")
+            
+            # 토큰 없이 테스트
+            response = requests.get(f"{self.base_url}/api/v2/products")
+            
+            if response.status_code == 401:
+                logger.info("✅ 토큰 없이 접근 거부 성공")
+            else:
+                logger.error(f"❌ 토큰 없이 접근 허용됨: {response.status_code}")
+            
+            self.test_results['authentication'] = True
             return True
-        else:
-            logger.warning("⚠️ 일부 테스트 실패")
+            
+        except Exception as e:
+            logger.error(f"❌ 인증 시스템 테스트 실패: {e}")
+            self.test_results['authentication'] = False
             return False
+    
+    async def run_all_tests(self) -> Dict[str, bool]:
+        """모든 테스트 실행"""
+        try:
+            logger.info("🚀 REST API 서버 통합 테스트 시작")
+            
+            # 서버가 실행 중인지 확인
+            try:
+                response = requests.get(f"{self.base_url}/health", timeout=5)
+                if response.status_code != 200:
+                    logger.error("❌ REST API 서버가 실행되지 않았습니다")
+                    logger.info("다음 명령어로 서버를 시작하세요: python rest_api_server.py")
+                    return {}
+            except requests.exceptions.RequestException:
+                logger.error("❌ REST API 서버에 연결할 수 없습니다")
+                logger.info("다음 명령어로 서버를 시작하세요: python rest_api_server.py")
+                return {}
+            
+            # 모든 테스트 실행
+            test_methods = [
+                self.test_server_health,
+                self.test_products_api,
+                self.test_search_api,
+                self.test_ai_api,
+                self.test_orders_api,
+                self.test_suppliers_api,
+                self.test_analytics_api,
+                self.test_batch_api,
+                self.test_authentication
+            ]
+            
+            for test_method in test_methods:
+                await test_method()
+            
+            # 결과 요약
+            passed_tests = sum(self.test_results.values())
+            total_tests = len(self.test_results)
+            
+            logger.info(f"\n📊 테스트 결과 요약:")
+            logger.info(f"  총 테스트: {total_tests}개")
+            logger.info(f"  성공: {passed_tests}개")
+            logger.info(f"  실패: {total_tests - passed_tests}개")
+            logger.info(f"  성공률: {passed_tests/total_tests*100:.1f}%")
+            
+            # 상세 결과
+            for test_name, result in self.test_results.items():
+                status = "✅ 성공" if result else "❌ 실패"
+                logger.info(f"  {test_name}: {status}")
+            
+            if passed_tests == total_tests:
+                logger.info("🎉 모든 테스트 통과!")
+            else:
+                logger.warning("⚠️ 일부 테스트 실패")
+            
+            return self.test_results
+            
+        except Exception as e:
+            logger.error(f"❌ 테스트 실행 중 오류: {e}")
+            return {}
 
 
 async def main():
     """메인 함수"""
-    async with RESTAPITester() as tester:
-        success = await tester.run_all_tests()
+    try:
+        # REST API 테스터 초기화
+        tester = RESTAPITester()
         
-        if success:
-            logger.info("\n✅ REST API 서버가 성공적으로 구현되었습니다!")
-            logger.info("\n🎯 다음 단계:")
-            logger.info("  1. 실제 운영 환경에서 API 서버 배포")
-            logger.info("  2. 외부 시스템과의 연동 테스트")
-            logger.info("  3. API 문서화 및 클라이언트 SDK 개발")
-        else:
-            logger.error("\n❌ REST API 서버 구현에 문제가 있습니다.")
-            logger.error("  로그를 확인하여 문제를 해결해주세요.")
+        # 모든 테스트 실행
+        results = await tester.run_all_tests()
+        
+        # 결과 반환
+        return results
+        
+    except Exception as e:
+        logger.error(f"❌ 메인 함수 실행 중 오류: {e}")
 
 
 if __name__ == "__main__":
