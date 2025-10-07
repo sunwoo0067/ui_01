@@ -1,0 +1,744 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>드롭쉬핑 상품 관리 대시보드</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .total-banner {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .total-banner h2 {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        
+        .total-banner p {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+        
+        .supplier-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .supplier-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .supplier-card h3 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 22px;
+        }
+        
+        .stat-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-label {
+            color: #999;
+            font-size: 13px;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            color: #333;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .products-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .products-section h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: #f8f9fa;
+        }
+        
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            color: #666;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e9ecef;
+            color: #333;
+        }
+        
+        tr:hover {
+            background: #f8f9fa;
+        }
+        
+        .product-title {
+            font-weight: 500;
+        }
+        
+        .price {
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .badge.active {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .badge.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 30px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏪 드롭쉬핑 상품 관리 대시보드</h1>
+            <p>데이터베이스 중심 아키텍처 | 생성: 2025-10-07 18:34:20</p>
+        </div>
+        
+        <div class="total-banner">
+            <h2>3,000개</h2>
+            <p>총 정규화 상품 (3개 공급사)</p>
+        </div>
+        
+        <div class="supplier-grid">
+            
+        <div class="supplier-card">
+            <h3>오너클랜</h3>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-label">상품 수</div>
+                    <div class="stat-value">1,000개</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">평균 가격</div>
+                    <div class="stat-value">₩11,620</div>
+                </div>
+            </div>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-label">최저가</div>
+                    <div class="stat-value">₩140</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">최고가</div>
+                    <div class="stat-value">₩449,240</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="supplier-card">
+            <h3>젠트레이드</h3>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-label">상품 수</div>
+                    <div class="stat-value">1,000개</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">평균 가격</div>
+                    <div class="stat-value">₩2,845</div>
+                </div>
+            </div>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-label">최저가</div>
+                    <div class="stat-value">₩30</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">최고가</div>
+                    <div class="stat-value">₩49,500</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="supplier-card">
+            <h3>도매꾹</h3>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-label">상품 수</div>
+                    <div class="stat-value">1,000개</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">평균 가격</div>
+                    <div class="stat-value">₩5,271</div>
+                </div>
+            </div>
+            <div class="stat-row">
+                <div class="stat">
+                    <div class="stat-label">최저가</div>
+                    <div class="stat-value">₩24</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-label">최고가</div>
+                    <div class="stat-value">₩73,680</div>
+                </div>
+            </div>
+        </div>
+        
+        </div>
+        
+        <div class="products-section">
+            <h2>📦 최근 상품 (상위 50개)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">No.</th>
+                        <th>상품명</th>
+                        <th style="width: 150px;">카테고리</th>
+                        <th style="width: 120px;">판매가</th>
+                        <th style="width: 120px;">원가</th>
+                        <th style="width: 80px;">상태</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+        <tr>
+            <td>1</td>
+            <td class="product-title">하프 집업 여자 티셔츠 스웨트 캐주얼 단정한...</td>
+            <td>티셔츠</td>
+            <td class="price">₩47,190</td>
+            <td class="price">₩47,190</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>2</td>
+            <td class="product-title">일자 팬츠 데님 여성 바지 워싱 데일리 편한...</td>
+            <td>청바지</td>
+            <td class="price">₩40,370</td>
+            <td class="price">₩40,370</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>3</td>
+            <td class="product-title">스탠드 다트 농구연습골대 공포함 농구놀이 농구골대...</td>
+            <td>다트</td>
+            <td class="price">₩41,800</td>
+            <td class="price">₩41,800</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>4</td>
+            <td class="product-title">비자트 우브 IH 인덕션 사각 에그롤팬 사각팬 계란말이팬 샌드위치팬 프라이팬 후라이팬...</td>
+            <td>일반프라이팬</td>
+            <td class="price">₩19,250</td>
+            <td class="price">₩19,250</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>5</td>
+            <td class="product-title">산도깨비 액상 방향제 물의정원 350ml 2개 거실 방 화장실 실내용 업소용 가정용...</td>
+            <td>실내용방향제</td>
+            <td class="price">₩7,430</td>
+            <td class="price">₩7,430</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>6</td>
+            <td class="product-title">벽걸이형 LCD 전자다트게임 소형 남녀노소 벽부착 보드게임 단체게임 파티 휴대용...</td>
+            <td>다트</td>
+            <td class="price">₩18,150</td>
+            <td class="price">₩18,150</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>7</td>
+            <td class="product-title">벽걸이형 LCD 전자다트게임 중형 남녀노소 벽부착 보드게임 단체게임 파티 휴대용...</td>
+            <td>다트</td>
+            <td class="price">₩22,550</td>
+            <td class="price">₩22,550</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>8</td>
+            <td class="product-title">벽걸이형 LCD 전자다트게임 대형 남녀노소 벽부착 보드게임 단체게임 파티 휴대용...</td>
+            <td>다트</td>
+            <td class="price">₩39,490</td>
+            <td class="price">₩39,490</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>9</td>
+            <td class="product-title">주부9단 줄당김 3중날 멀티 회전다지기 만능다지기 마늘까기 마늘껍질까기 야채 이유식 초퍼 핸드믹서기...</td>
+            <td>다지기</td>
+            <td class="price">₩9,680</td>
+            <td class="price">₩9,680</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>10</td>
+            <td class="product-title">크린랩 따뜻한 기모고무장갑 2켤레 기모장갑 김장용 고무장갑 주방장갑 설거지 손시림방지...</td>
+            <td>고무장갑</td>
+            <td class="price">₩6,050</td>
+            <td class="price">₩6,050</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>11</td>
+            <td class="product-title">반지 링 써지컬 여성 고급 예쁜 패션 데일리...</td>
+            <td>패션반지</td>
+            <td class="price">₩11,110</td>
+            <td class="price">₩11,110</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>12</td>
+            <td class="product-title">일자 데님 청바지 팬츠 스판 커스텀 셀프 수선 컷...</td>
+            <td>청바지</td>
+            <td class="price">₩42,350</td>
+            <td class="price">₩42,350</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>13</td>
+            <td class="product-title">탁상용 온도계 디지털 시계 습도계...</td>
+            <td>알람/탁상시계</td>
+            <td class="price">₩17,990</td>
+            <td class="price">₩17,990</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>14</td>
+            <td class="product-title">데님 바지 일자 팬츠 스판 슬림 심플 데일리...</td>
+            <td>청바지</td>
+            <td class="price">₩42,350</td>
+            <td class="price">₩42,350</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>15</td>
+            <td class="product-title">테니스 스커트 밴딩 A라인 치마 여성 속바지내장...</td>
+            <td>스커트</td>
+            <td class="price">₩18,480</td>
+            <td class="price">₩18,480</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>16</td>
+            <td class="product-title">전술 장갑 자전거 오토바이 라이딩 하드커버 보호...</td>
+            <td>장갑</td>
+            <td class="price">₩8,690</td>
+            <td class="price">₩8,690</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>17</td>
+            <td class="product-title">오토바이 덮개 커버 자전거 방수 자외선차단 보호...</td>
+            <td>기타오토바이용품</td>
+            <td class="price">₩22,440</td>
+            <td class="price">₩22,440</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>18</td>
+            <td class="product-title">골지 팬츠 가을 밴딩 와이드 바지 여성 편한...</td>
+            <td>바지</td>
+            <td class="price">₩15,730</td>
+            <td class="price">₩15,730</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>19</td>
+            <td class="product-title">더블 링 반지 써지컬 여자 고급 예쁜 고품질...</td>
+            <td>패션반지</td>
+            <td class="price">₩9,130</td>
+            <td class="price">₩9,130</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>20</td>
+            <td class="product-title">써지컬 반지 링 심플 데일리 고급 예쁜...</td>
+            <td>패션반지</td>
+            <td class="price">₩7,150</td>
+            <td class="price">₩7,150</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>21</td>
+            <td class="product-title">집게핀 헤어 올림머리 머리 빅사이즈 리본 하트...</td>
+            <td>헤어핀</td>
+            <td class="price">₩6,930</td>
+            <td class="price">₩6,930</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>22</td>
+            <td class="product-title">절연 공구 펜치 직각 전기 작업용 클라인툴 핀셋...</td>
+            <td>펜치</td>
+            <td class="price">₩129,140</td>
+            <td class="price">₩129,140</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>23</td>
+            <td class="product-title">쁘띠 스카프 새틴 여성 고급 소프트 포인트...</td>
+            <td>쁘띠/미니</td>
+            <td class="price">₩4,950</td>
+            <td class="price">₩4,950</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>24</td>
+            <td class="product-title">중청 하이웨스트 와이드 부츠컷 청바지 FR-161856...</td>
+            <td>청바지</td>
+            <td class="price">₩29,700</td>
+            <td class="price">₩29,700</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>25</td>
+            <td class="product-title">토트 크로스백 가방 미니 여성 심플 주머니 4단...</td>
+            <td>크로스백</td>
+            <td class="price">₩12,210</td>
+            <td class="price">₩12,210</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>26</td>
+            <td class="product-title">홈웨어 세트 상하 반바지 여성 반팔 긴바지 3피스...</td>
+            <td>잠옷/홈웨어</td>
+            <td class="price">₩16,720</td>
+            <td class="price">₩16,720</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>27</td>
+            <td class="product-title">민소매 원피스 롱 나시 A라인 무지 데일리 뒷트임...</td>
+            <td>원피스</td>
+            <td class="price">₩31,460</td>
+            <td class="price">₩31,460</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>28</td>
+            <td class="product-title">스카프마니아 국산 목걸이 쿨 냉감 스카프 낚시 등산 스 얼음 멀티 여름 캠 쿨링...</td>
+            <td>쁘띠/미니</td>
+            <td class="price">₩2,480</td>
+            <td class="price">₩2,480</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>29</td>
+            <td class="product-title">수정용 펜 7ml 극세사 학생 필기용 준비 수정펜...</td>
+            <td>수정용품</td>
+            <td class="price">₩6,600</td>
+            <td class="price">₩6,600</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>30</td>
+            <td class="product-title">멀칭핀 고정커버 10개 제초 매트 고정용 핀 소형...</td>
+            <td>원예부자재</td>
+            <td class="price">₩4,070</td>
+            <td class="price">₩4,070</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>31</td>
+            <td class="product-title">유리 머그컵 2p...</td>
+            <td>유리컵</td>
+            <td class="price">₩20,570</td>
+            <td class="price">₩20,570</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>32</td>
+            <td class="product-title">실리콘 샴푸브러쉬 두피마사지솔 두피마사지빗...</td>
+            <td>헤어브러시</td>
+            <td class="price">₩6,600</td>
+            <td class="price">₩6,600</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>33</td>
+            <td class="product-title">도마 거치대 무타공 1단 선반 도마꽂이 정리대 꽂이...</td>
+            <td>주방정리소품</td>
+            <td class="price">₩15,400</td>
+            <td class="price">₩15,400</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>34</td>
+            <td class="product-title">수성 컬러 사인펜 노란색 양쪽 끝 데코용 필기구 트윈타입...</td>
+            <td>사인펜</td>
+            <td class="price">₩2,970</td>
+            <td class="price">₩2,970</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>35</td>
+            <td class="product-title">강아지 발톱 푸드컷터 프로 전용 도기맨 깎기 도구 애완동물 사용 편리한 칼...</td>
+            <td>발톱/발 관리</td>
+            <td class="price">₩14,850</td>
+            <td class="price">₩14,850</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>36</td>
+            <td class="product-title">고급 캔 방향제 (후리지아)...</td>
+            <td>실내용방향제</td>
+            <td class="price">₩12,320</td>
+            <td class="price">₩12,320</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>37</td>
+            <td class="product-title">우산나라 송월타올 뉴 회색 단 우산 폰지...</td>
+            <td>자동우산</td>
+            <td class="price">₩15,680</td>
+            <td class="price">₩15,680</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>38</td>
+            <td class="product-title">모자 정리 도어 행거 무타공 옷걸이 수납 용품 벽걸이형 모자걸이...</td>
+            <td>소품걸이</td>
+            <td class="price">₩52,030</td>
+            <td class="price">₩52,030</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>39</td>
+            <td class="product-title">우산나라 송월타올 폰지바이어스 우산 단 파랑 뉴...</td>
+            <td>자동우산</td>
+            <td class="price">₩18,520</td>
+            <td class="price">₩18,520</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>40</td>
+            <td class="product-title">대나무숯 피지 클렌징폼 200gx2개...</td>
+            <td>클렌징폼</td>
+            <td class="price">₩18,310</td>
+            <td class="price">₩18,310</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>41</td>
+            <td class="product-title">발아보리 액상 맥아당 몰트 엑기스 1.25kg...</td>
+            <td>제과/제빵재료</td>
+            <td class="price">₩20,360</td>
+            <td class="price">₩20,360</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>42</td>
+            <td class="product-title">튜브탑 오프숄더 브라 끈없는 노와이어 캡내장 여자...</td>
+            <td>브라</td>
+            <td class="price">₩11,110</td>
+            <td class="price">₩11,110</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>43</td>
+            <td class="product-title">방수팩 핸드폰 물놀이 가방 워터밤 터치 목걸이...</td>
+            <td>방수팩</td>
+            <td class="price">₩5,940</td>
+            <td class="price">₩5,940</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>44</td>
+            <td class="product-title">와이드 팬츠 밴딩 통넓은 바지 여성 편한 체크...</td>
+            <td>바지</td>
+            <td class="price">₩45,320</td>
+            <td class="price">₩45,320</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>45</td>
+            <td class="product-title">스카프마니아 쿨 목스 머플러 국산 특수 쿨스 냉 쿨러 스카프 냉감스 스 토시 폴리머 목...</td>
+            <td>쁘띠/미니</td>
+            <td class="price">₩8,430</td>
+            <td class="price">₩8,430</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>46</td>
+            <td class="product-title">롤러 마사지기 안마 목 어깨 다리 전신 휴대용...</td>
+            <td>안마기</td>
+            <td class="price">₩11,880</td>
+            <td class="price">₩11,880</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>47</td>
+            <td class="product-title">손목 보호대 슬림 경량 배드민턴 스포츠 헬스...</td>
+            <td>손목보호대</td>
+            <td class="price">₩9,900</td>
+            <td class="price">₩9,900</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>48</td>
+            <td class="product-title">건조 그물망 세탁 다용도 걸이 메쉬 수납 정리...</td>
+            <td>이동접이식</td>
+            <td class="price">₩11,880</td>
+            <td class="price">₩11,880</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>49</td>
+            <td class="product-title">근력 밴드 홈트 재활 홈트레이닝 스트레칭 운동...</td>
+            <td>웨이트용품</td>
+            <td class="price">₩11,880</td>
+            <td class="price">₩11,880</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+        <tr>
+            <td>50</td>
+            <td class="product-title">보정 속옷 압박 몸매 뱃살 이너웨어 여자...</td>
+            <td>거들</td>
+            <td class="price">₩13,640</td>
+            <td class="price">₩13,640</td>
+            <td><span class="badge active">active</span></td>
+        </tr>
+        
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="footer">
+            <p>Dropshipping Automation System v2.0 | REST API: http://localhost:8000/api/docs</p>
+        </div>
+    </div>
+</body>
+</html>
+    
