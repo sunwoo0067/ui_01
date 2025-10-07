@@ -49,3 +49,18 @@ ENV/
 env.bak/
 venv.bak/
 .pytest_cache/
+
+# Batch collection results and temporary files
+*_results.json
+*_result.json
+*_collection_result.json
+*_batch_result.json
+*_response.json
+*_categories.json
+*_category_list.json
+*_api_response_debug.json
+bulk_collection_results.json
+database_centric_architecture_results.json
+marketplace_api_integration_results.json
+system_integration_test_results.json
+nul
