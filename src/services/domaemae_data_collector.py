@@ -36,12 +36,28 @@ class DomaemaeTokenManager:
 
 
 class DomaemaeDataCollector:
-    """도매꾹 데이터 수집기"""
+    """도매꾹 데이터 수집기 (도매꾹/도매매 구분 지원)"""
     
     def __init__(self, db_service: DatabaseService):
         self.db_service = db_service
         self.error_handler = ErrorHandler()
         self.token_manager = DomaemaeTokenManager(db_service)
+        
+        # 도매꾹/도매매 시장 정보
+        self.market_info = {
+            "dome": {
+                "name": "도매꾹",
+                "description": "대량 구매 상품 (도매) - 최소 구매 수량 있음",
+                "min_order_type": "bulk",
+                "supplier_type": "wholesale"
+            },
+            "supply": {
+                "name": "도매매", 
+                "description": "1개씩 구매 가능 (소매)",
+                "min_order_type": "single",
+                "supplier_type": "retail"
+            }
+        }
         
     async def _make_api_request(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """API 요청 실행"""
@@ -73,8 +89,8 @@ class DomaemaeDataCollector:
                             size: int = 200,  # 페이지당 상품 개수 (최대 200)
                             page: int = 1,
                             sort: str = "rd",  # 정렬 방식
-                            keyword: str = "가방",  # 기본 검색어 (필수)
-                            category: Optional[str] = None,
+                            keyword: Optional[str] = None,  # 검색어 (선택사항)
+                            category: Optional[str] = None,  # 카테고리 (선택사항)
                             seller_id: Optional[str] = None,
                             min_price: Optional[int] = None,
                             max_price: Optional[int] = None,
@@ -85,9 +101,10 @@ class DomaemaeDataCollector:
                             excellent_seller: Optional[bool] = None,
                             fast_delivery: Optional[bool] = None,
                             lowest_price: Optional[bool] = None) -> List[Dict[str, Any]]:
-        """상품 데이터 수집"""
+        """상품 데이터 수집 (도매꾹/도매매 구분)"""
         try:
-            logger.info(f"도매꾹 상품 데이터 수집 시작: {account_name}")
+            market_name = self.market_info[market]["name"]
+            logger.info(f"{market_name} 상품 데이터 수집 시작: {account_name} (시장: {market})")
             
             # 인증 정보 가져오기
             credentials = await self.token_manager.get_credentials(account_name)
@@ -104,13 +121,23 @@ class DomaemaeDataCollector:
                 "so": sort
             }
             
-            # 선택적 파라미터 추가
+            # 선택적 파라미터 추가 (최소 하나는 필요)
+            search_params_added = False
+            
             if category:
                 params["ca"] = category
+                search_params_added = True
             if seller_id:
                 params["id"] = seller_id
+                search_params_added = True
             if keyword:
                 params["kw"] = keyword
+                search_params_added = True
+            
+            # 검색 조건이 없으면 기본 키워드 사용
+            if not search_params_added:
+                params["kw"] = "상품"  # 기본 검색어
+                logger.warning("검색 조건이 없어 기본 키워드 '상품'을 사용합니다")
             if min_price is not None:
                 params["mnp"] = min_price
             if max_price is not None:
@@ -143,13 +170,16 @@ class DomaemaeDataCollector:
             # 응답 데이터 파싱
             products = await self._parse_api_response(result)
             
-            # 계정명 추가
+            # 시장별 메타데이터 추가
             for product in products:
                 product["account_name"] = account_name
                 product["market"] = market
+                product["market_name"] = market_name
+                product["market_type"] = self.market_info[market]["supplier_type"]
+                product["min_order_type"] = self.market_info[market]["min_order_type"]
                 product["collected_at"] = datetime.utcnow().isoformat()
             
-            logger.info(f"도매꾹 상품 데이터 수집 완료: {len(products)}개")
+            logger.info(f"{market_name} 상품 데이터 수집 완료: {len(products)}개")
             return products
             
         except Exception as e:
@@ -226,14 +256,15 @@ class DomaemaeDataCollector:
                                    max_pages: int = 10,
                                    market: str = "dome",
                                    **kwargs) -> List[Dict[str, Any]]:
-        """상품 데이터 배치 수집"""
+        """상품 데이터 배치 수집 (단일 시장)"""
         try:
-            logger.info(f"도매꾹 상품 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size}, 최대 페이지: {max_pages})")
+            market_name = self.market_info[market]["name"]
+            logger.info(f"{market_name} 상품 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size}, 최대 페이지: {max_pages})")
             
             all_products = []
             
             for page in range(1, max_pages + 1):
-                logger.info(f"페이지 {page} 수집 중...")
+                logger.info(f"{market_name} 페이지 {page} 수집 중...")
                 
                 products = await self.collect_products(
                     account_name=account_name,
@@ -244,29 +275,131 @@ class DomaemaeDataCollector:
                 )
                 
                 if not products:
-                    logger.info(f"페이지 {page}에서 상품을 찾지 못했습니다. 수집을 종료합니다.")
+                    logger.info(f"{market_name} 페이지 {page}에서 상품을 찾지 못했습니다. 수집을 종료합니다.")
                     break
                 
                 all_products.extend(products)
-                logger.info(f"페이지 {page} 완료: {len(products)}개 상품")
+                logger.info(f"{market_name} 페이지 {page} 완료: {len(products)}개 상품")
                 
                 # API 호출 간격 조절
                 await asyncio.sleep(0.5)
             
-            logger.info(f"도매꾹 배치 수집 완료: 총 {len(all_products)}개 상품")
+            logger.info(f"{market_name} 배치 수집 완료: 총 {len(all_products)}개 상품")
             return all_products
             
         except Exception as e:
-            self.error_handler.log_error(e, f"도매꾹 배치 수집 실패: {account_name}")
+            self.error_handler.log_error(e, f"{market_name} 배치 수집 실패: {account_name}")
             return []
+    
+    async def collect_products_by_category(self, account_name: str,
+                                         categories: List[str],
+                                         batch_size: int = 200,
+                                         max_pages_per_category: int = 5,
+                                         markets: List[str] = None) -> Dict[str, List[Dict[str, Any]]]:
+        """카테고리별 상품 데이터 수집 (도매꾹/도매매 모두)"""
+        try:
+            if markets is None:
+                markets = ["dome", "supply"]  # 기본적으로 두 시장 모두 수집
+            
+            logger.info(f"카테고리별 상품 데이터 수집 시작: {account_name}")
+            logger.info(f"카테고리: {categories}")
+            logger.info(f"시장: {markets}")
+            
+            results = {}
+            
+            for market in markets:
+                market_name = self.market_info[market]["name"]
+                logger.info(f"{market_name} 카테고리별 수집 시작...")
+                
+                market_products = []
+                
+                for category in categories:
+                    logger.info(f"{market_name} 카테고리 '{category}' 수집 중...")
+                    
+                    category_products = []
+                    
+                    for page in range(1, max_pages_per_category + 1):
+                        products = await self.collect_products(
+                            account_name=account_name,
+                            market=market,
+                            category=category,
+                            size=batch_size,
+                            page=page
+                        )
+                        
+                        if not products:
+                            logger.info(f"{market_name} 카테고리 '{category}' 페이지 {page}에서 상품을 찾지 못했습니다.")
+                            break
+                        
+                        category_products.extend(products)
+                        logger.info(f"{market_name} 카테고리 '{category}' 페이지 {page} 완료: {len(products)}개 상품")
+                        
+                        # API 호출 간격 조절
+                        await asyncio.sleep(0.5)
+                    
+                    market_products.extend(category_products)
+                    logger.info(f"{market_name} 카테고리 '{category}' 수집 완료: {len(category_products)}개 상품")
+                
+                results[market] = market_products
+                logger.info(f"{market_name} 카테고리별 수집 완료: 총 {len(market_products)}개 상품")
+            
+            total_products = sum(len(products) for products in results.values())
+            logger.info(f"카테고리별 수집 전체 완료: 총 {total_products}개 상품")
+            
+            return results
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"카테고리별 수집 실패: {account_name}")
+            return {}
+    
+    async def collect_all_markets_batch(self, account_name: str,
+                                      batch_size: int = 200,
+                                      max_pages: int = 10,
+                                      **kwargs) -> Dict[str, List[Dict[str, Any]]]:
+        """도매꾹/도매매 모든 시장 배치 수집"""
+        try:
+            logger.info(f"모든 시장 배치 수집 시작: {account_name}")
+            
+            results = {}
+            markets = ["dome", "supply"]
+            
+            for market in markets:
+                market_name = self.market_info[market]["name"]
+                logger.info(f"{market_name} 배치 수집 시작...")
+                
+                products = await self.collect_products_batch(
+                    account_name=account_name,
+                    batch_size=batch_size,
+                    max_pages=max_pages,
+                    market=market,
+                    **kwargs
+                )
+                
+                results[market] = products
+                logger.info(f"{market_name} 배치 수집 완료: {len(products)}개 상품")
+            
+            total_products = sum(len(products) for products in results.values())
+            logger.info(f"모든 시장 배치 수집 완료: 총 {total_products}개 상품")
+            
+            return results
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"모든 시장 배치 수집 실패: {account_name}")
+            return {}
 
 
 class DomaemaeDataStorage:
-    """도매꾹 데이터 저장 서비스"""
+    """도매꾹 데이터 저장 서비스 (도매꾹/도매매 구분 저장)"""
     
     def __init__(self, db_service: DatabaseService):
         self.db_service = db_service
         self.error_handler = ErrorHandler()
+        
+        # 시장별 공급사 코드 매핑
+        self.market_supplier_mapping = {
+            "dome": "domaemae_dome",      # 도매꾹
+            "supply": "domaemae_supply"   # 도매매
+        }
     
     async def _get_supplier_id(self, supplier_code: str) -> str:
         """공급사 ID 조회"""
@@ -307,66 +440,87 @@ class DomaemaeDataStorage:
         return hashlib.md5(data_str.encode('utf-8')).hexdigest()
     
     async def save_products(self, products: List[Dict[str, Any]]) -> int:
-        """상품 데이터 저장"""
+        """상품 데이터 저장 (시장별 구분)"""
         try:
             if not products:
                 logger.info("저장할 상품 데이터가 없습니다")
                 return 0
             
-            logger.info(f"도매꾹 상품 데이터 저장 시작: {len(products)}개")
+            # 시장별로 그룹화
+            market_groups = {}
+            for product in products:
+                market = product.get("market", "dome")
+                if market not in market_groups:
+                    market_groups[market] = []
+                market_groups[market].append(product)
+            
+            logger.info(f"도매꾹 상품 데이터 저장 시작: {len(products)}개 (시장별: {dict((k, len(v)) for k, v in market_groups.items())})")
             
             saved_count = 0
-            for product in products:
-                try:
-                    # 원본 데이터 저장 (raw_product_data 테이블)
-                    raw_data = {
-                        "supplier_id": await self._get_supplier_id("domaemae"),
-                        "supplier_account_id": await self._get_supplier_account_id("domaemae", product["account_name"]),
-                        "raw_data": json.dumps(product, ensure_ascii=False),
-                        "collection_method": "api",
-                        "collection_source": "https://domeggook.com/ssl/api/",
-                        "supplier_product_id": product["supplier_key"],
-                        "is_processed": False,
-                        "data_hash": self._calculate_hash(product),
-                        "metadata": json.dumps({
-                            "collected_at": product["collected_at"],
-                            "account_name": product["account_name"],
-                            "market": product.get("market", "")
-                        }, ensure_ascii=False)
-                    }
+            for market, market_products in market_groups.items():
+                market_name = "도매꾹" if market == "dome" else "도매매"
+                logger.info(f"{market_name} 상품 저장 시작: {len(market_products)}개")
+                
+                for product in market_products:
+                    try:
+                        # 시장별 공급사 코드 결정
+                        supplier_code = self.market_supplier_mapping.get(market, "domaemae")
+                        
+                        # 원본 데이터 저장 (raw_product_data 테이블)
+                        raw_data = {
+                            "supplier_id": await self._get_supplier_id(supplier_code),
+                            "supplier_account_id": await self._get_supplier_account_id(supplier_code, product["account_name"]),
+                            "raw_data": json.dumps(product, ensure_ascii=False),
+                            "collection_method": "api",
+                            "collection_source": "https://domeggook.com/ssl/api/",
+                            "supplier_product_id": f"{market}_{product['supplier_key']}",  # 시장 구분을 위한 접두사
+                            "is_processed": False,
+                            "data_hash": self._calculate_hash(product),
+                            "metadata": json.dumps({
+                                "collected_at": product["collected_at"],
+                                "account_name": product["account_name"],
+                                "market": product.get("market", ""),
+                                "market_name": product.get("market_name", ""),
+                                "market_type": product.get("market_type", ""),
+                                "min_order_type": product.get("min_order_type", "")
+                            }, ensure_ascii=False)
+                        }
                     
-                    # 기존 데이터 확인
-                    existing = await self.db_service.select_data(
-                        "raw_product_data",
-                        {"supplier_product_id": product["supplier_key"]}
-                    )
-                    
-                    if existing:
-                        # 업데이트
-                        update_result = await self.db_service.update_data(
+                        # 기존 데이터 확인 (시장 구분된 ID로)
+                        product_id = f"{market}_{product['supplier_key']}"
+                        existing = await self.db_service.select_data(
                             "raw_product_data",
-                            {"supplier_product_id": product["supplier_key"]},
-                            raw_data
+                            {"supplier_product_id": product_id}
                         )
-                        if update_result:
-                            logger.debug(f"도매꾹 상품 데이터 업데이트: {product['supplier_key']}")
+                        
+                        if existing:
+                            # 업데이트
+                            update_result = await self.db_service.update_data(
+                                "raw_product_data",
+                                {"supplier_product_id": product_id},
+                                raw_data
+                            )
+                            if update_result:
+                                logger.debug(f"{market_name} 상품 데이터 업데이트: {product_id}")
+                            else:
+                                logger.warning(f"{market_name} 상품 데이터 업데이트 실패 (레코드 없음): {product_id}")
+                                # 업데이트 실패 시 새로 삽입 시도
+                                await self.db_service.insert_data("raw_product_data", raw_data)
+                                logger.debug(f"{market_name} 상품 데이터 삽입 (업데이트 실패 후): {product_id}")
                         else:
-                            logger.warning(f"도매꾹 상품 데이터 업데이트 실패 (레코드 없음): {product['supplier_key']}")
-                            # 업데이트 실패 시 새로 삽입 시도
+                            # 새로 삽입
                             await self.db_service.insert_data("raw_product_data", raw_data)
-                            logger.debug(f"도매꾹 상품 데이터 삽입 (업데이트 실패 후): {product['supplier_key']}")
-                    else:
-                        # 새로 삽입
-                        await self.db_service.insert_data("raw_product_data", raw_data)
-                        logger.debug(f"도매꾹 상품 데이터 삽입: {product['supplier_key']}")
-                    
-                    saved_count += 1
-                    
-                except Exception as e:
-                    self.error_handler.log_error(e, f"도매꾹 상품 저장 실패: {product.get('supplier_key', 'Unknown')}")
-                    continue
+                            logger.debug(f"{market_name} 상품 데이터 삽입: {product_id}")
+                        
+                        saved_count += 1
+                        
+                    except Exception as e:
+                        self.error_handler.log_error(e, f"{market_name} 상품 저장 실패: {product.get('supplier_key', 'Unknown')}")
+                        continue
+                
+                logger.info(f"{market_name} 상품 저장 완료: {len(market_products)}개")
             
-            logger.info(f"도매꾹 상품 데이터 저장 완료: {saved_count}개")
+            logger.info(f"도매꾹 상품 데이터 저장 완료: 총 {saved_count}개")
             return saved_count
         except Exception as e:
             self.error_handler.log_error(e, "도매꾹 상품 데이터 저장 실패")

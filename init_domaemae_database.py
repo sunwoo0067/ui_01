@@ -26,18 +26,18 @@ async def init_domaemae_database():
         # 도매꾹 계정 관리자 초기화
         account_manager = DomaemaeAccountManager(db_service)
         
-        # 도매꾹 공급사 등록 (이미 있다면 무시)
+        # 도매꾹 공급사 등록 (도매꾹)
         try:
-            suppliers_data = {
+            suppliers_data_dome = {
                 "name": "도매꾹",
-                "code": "domaemae",
+                "code": "domaemae_dome",
                 "type": "api",
                 "api_endpoint": "https://domeggook.com/ssl/api/",
                 "is_active": True
             }
             
             # 공급사 등록
-            await db_service.insert_data("suppliers", suppliers_data)
+            await db_service.insert_data("suppliers", suppliers_data_dome)
             logger.info("도매꾹 공급사 등록 완료")
             
         except Exception as e:
@@ -46,20 +46,46 @@ async def init_domaemae_database():
             else:
                 logger.error(f"도매꾹 공급사 등록 실패: {e}")
         
-        # 테스트 계정 생성
-        test_account_data = {
-            "account_name": "test_account",
-            "api_key": "96ef1110327e9ce5be389e5eaa612f4a",
-            "version": "4.1",
-            "description": "도매꾹 테스트 계정"
-        }
+        # 도매매 공급사 등록 (도매매)
+        try:
+            suppliers_data_supply = {
+                "name": "도매매",
+                "code": "domaemae_supply", 
+                "type": "api",
+                "api_endpoint": "https://domeggook.com/ssl/api/",
+                "is_active": True
+            }
+            
+            # 공급사 등록
+            await db_service.insert_data("suppliers", suppliers_data_supply)
+            logger.info("도매매 공급사 등록 완료")
+            
+        except Exception as e:
+            if "duplicate key" in str(e).lower():
+                logger.info("도매매 공급사가 이미 등록되어 있습니다")
+            else:
+                logger.error(f"도매매 공급사 등록 실패: {e}")
         
-        account_id = await account_manager.create_domaemae_account(**test_account_data)
-        
-        if account_id:
-            logger.info(f"도매꾹 테스트 계정 생성 완료: {account_id}")
-        else:
-            logger.warning("도매꾹 테스트 계정 생성 실패")
+        # 테스트 계정 생성 (이미 있다면 무시)
+        try:
+            test_account_data = {
+                "account_name": "test_account",
+                "api_key": "96ef1110327e9ce5be389e5eaa612f4a",
+                "version": "4.1"
+            }
+            
+            account_id = await account_manager.create_domaemae_account(**test_account_data)
+            
+            if account_id:
+                logger.info(f"도매꾹 테스트 계정 생성 완료: {account_id}")
+            else:
+                logger.warning("도매꾹 테스트 계정 생성 실패")
+                
+        except Exception as e:
+            if "duplicate key" in str(e).lower():
+                logger.info("도매꾹 테스트 계정이 이미 존재합니다")
+            else:
+                logger.error(f"도매꾹 테스트 계정 생성 실패: {e}")
         
         # 계정 목록 확인
         accounts = await account_manager.list_domaemae_accounts()
