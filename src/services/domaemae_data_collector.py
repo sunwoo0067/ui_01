@@ -1,0 +1,373 @@
+import asyncio
+import aiohttp
+import json
+from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
+from loguru import logger
+
+from src.services.database_service import DatabaseService
+from src.services.supplier_account_manager import SupplierAccountManager
+from src.utils.error_handler import ErrorHandler
+
+
+class DomaemaeTokenManager:
+    """도매꾹 API 토큰 관리"""
+    
+    def __init__(self, db_service: DatabaseService):
+        self.db_service = db_service
+        self.error_handler = ErrorHandler()
+        self.account_manager = SupplierAccountManager()
+        
+    async def get_credentials(self, account_name: str) -> Dict[str, str]:
+        """계정 정보에서 인증 정보 가져오기"""
+        try:
+            account = await self.account_manager.get_supplier_account("domaemae", account_name)
+            if not account:
+                raise ValueError(f"도매꾹 계정을 찾을 수 없습니다: {account_name}")
+            
+            credentials = account.get("account_credentials", {})
+            return {
+                "api_key": credentials.get("api_key"),
+                "version": credentials.get("version", "4.1")
+            }
+        except Exception as e:
+            self.error_handler.log_error(e, f"도매꾹 인증 정보 조회 실패: {account_name}")
+            raise
+
+
+class DomaemaeDataCollector:
+    """도매꾹 데이터 수집기"""
+    
+    def __init__(self, db_service: DatabaseService):
+        self.db_service = db_service
+        self.error_handler = ErrorHandler()
+        self.token_manager = DomaemaeTokenManager(db_service)
+        
+    async def _make_api_request(self, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """API 요청 실행"""
+        try:
+            url = "https://domeggook.com/ssl/api/"
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=30) as response:
+                    if response.status == 200:
+                        content_type = response.headers.get('content-type', '')
+                        
+                        if 'application/json' in content_type:
+                            return await response.json()
+                        else:
+                            # XML 응답인 경우 JSON으로 변환 시도
+                            xml_content = await response.text()
+                            # 간단한 XML 파싱 (실제로는 더 정교한 파싱 필요)
+                            logger.warning("XML 응답을 받았지만 JSON으로 처리합니다")
+                            return {"raw_xml": xml_content}
+                    else:
+                        logger.error(f"API 요청 실패: {response.status}")
+                        return None
+        except Exception as e:
+            self.error_handler.log_error(e, f"API 요청 실패: {url}")
+            return None
+    
+    async def collect_products(self, account_name: str,
+                            market: str = "dome",  # dome: 도매꾹, supply: 도매매
+                            size: int = 200,  # 페이지당 상품 개수 (최대 200)
+                            page: int = 1,
+                            sort: str = "rd",  # 정렬 방식
+                            keyword: str = "가방",  # 기본 검색어 (필수)
+                            category: Optional[str] = None,
+                            seller_id: Optional[str] = None,
+                            min_price: Optional[int] = None,
+                            max_price: Optional[int] = None,
+                            min_quantity: Optional[int] = None,
+                            max_quantity: Optional[int] = None,
+                            shipping: Optional[str] = None,
+                            origin: Optional[str] = None,
+                            excellent_seller: Optional[bool] = None,
+                            fast_delivery: Optional[bool] = None,
+                            lowest_price: Optional[bool] = None) -> List[Dict[str, Any]]:
+        """상품 데이터 수집"""
+        try:
+            logger.info(f"도매꾹 상품 데이터 수집 시작: {account_name}")
+            
+            # 인증 정보 가져오기
+            credentials = await self.token_manager.get_credentials(account_name)
+            
+            # API 파라미터 구성
+            params = {
+                "ver": credentials["version"],
+                "mode": "getItemList",
+                "aid": credentials["api_key"],
+                "market": market,
+                "om": "json",  # JSON 형식
+                "sz": size,
+                "pg": page,
+                "so": sort
+            }
+            
+            # 선택적 파라미터 추가
+            if category:
+                params["ca"] = category
+            if seller_id:
+                params["id"] = seller_id
+            if keyword:
+                params["kw"] = keyword
+            if min_price is not None:
+                params["mnp"] = min_price
+            if max_price is not None:
+                params["mxp"] = max_price
+            if min_quantity is not None:
+                params["mnq"] = min_quantity
+            if max_quantity is not None:
+                params["mxq"] = max_quantity
+            if shipping:
+                params["who"] = shipping
+            if origin:
+                params["org"] = origin
+            if excellent_seller is not None:
+                params["sgd"] = excellent_seller
+            if fast_delivery is not None:
+                params["fdl"] = fast_delivery
+            if lowest_price is not None:
+                params["lwp"] = lowest_price
+            
+            # None 값 제거
+            params = {k: v for k, v in params.items() if v is not None}
+            
+            # API 요청
+            result = await self._make_api_request(params)
+            
+            if not result:
+                logger.error("도매꾹 API 응답 없음")
+                return []
+            
+            # 응답 데이터 파싱
+            products = await self._parse_api_response(result)
+            
+            # 계정명 추가
+            for product in products:
+                product["account_name"] = account_name
+                product["market"] = market
+                product["collected_at"] = datetime.utcnow().isoformat()
+            
+            logger.info(f"도매꾹 상품 데이터 수집 완료: {len(products)}개")
+            return products
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"도매꾹 상품 데이터 수집 실패: {account_name}")
+            return []
+    
+    async def _parse_api_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """API 응답 파싱"""
+        try:
+            products = []
+            
+            # 도매꾹 JSON 응답 구조 확인
+            if "domeggook" in response:
+                domeggook_data = response["domeggook"]
+                
+                if "list" in domeggook_data and "item" in domeggook_data["list"]:
+                    items = domeggook_data["list"]["item"]
+                    
+                    # 단일 아이템인 경우 리스트로 변환
+                    if not isinstance(items, list):
+                        items = [items]
+                    
+                    for item in items:
+                        product_data = {
+                            "supplier_key": str(item.get("no", "")),
+                            "title": item.get("title", ""),
+                            "price": int(item.get("price", 0)) if item.get("price") else 0,
+                            "unit_quantity": int(item.get("unitQty", 1)) if item.get("unitQty") else 1,
+                            "seller_id": item.get("id", ""),
+                            "seller_nick": item.get("nick", ""),
+                            "thumbnail_url": item.get("thumb", ""),
+                            "product_url": item.get("url", ""),
+                            "company_only": item.get("comOnly", "false").lower() == "true",
+                            "adult_only": item.get("adultOnly", "false").lower() == "true",
+                            "lowest_price": item.get("lwp", "false").lower() == "true",
+                            "use_options": item.get("useopt", "false").lower() == "true",
+                            "market_info": item.get("market", {}),
+                            "dome_price": item.get("domePrice", ""),
+                            "quantity_info": item.get("qty", {}),
+                            "delivery_info": item.get("deli", {}),
+                            "idx_com": item.get("idxCOM", "")
+                        }
+                        
+                        products.append(product_data)
+                
+                # 헤더 정보도 로깅
+                if "header" in domeggook_data:
+                    header = domeggook_data["header"]
+                    logger.info(f"도매꾹 응답 헤더 - 총 상품: {header.get('numberOfItems', 0)}, 현재 페이지: {header.get('currentPage', 1)}")
+            
+            # 에러 응답인 경우
+            elif "errors" in response:
+                error_info = response["errors"]
+                logger.error(f"도매꾹 API 에러: {error_info.get('message', 'Unknown error')}")
+                return []
+            
+            # XML 응답인 경우 (raw_xml이 있는 경우)
+            elif "raw_xml" in response:
+                logger.warning("XML 응답은 현재 지원하지 않습니다")
+                return []
+            
+            else:
+                logger.warning(f"예상하지 못한 응답 형식: {list(response.keys())}")
+                return []
+            
+            return products
+            
+        except Exception as e:
+            self.error_handler.log_error(e, "도매꾹 API 응답 파싱 실패")
+            return []
+    
+    async def collect_products_batch(self, account_name: str,
+                                   batch_size: int = 200,
+                                   max_pages: int = 10,
+                                   market: str = "dome",
+                                   **kwargs) -> List[Dict[str, Any]]:
+        """상품 데이터 배치 수집"""
+        try:
+            logger.info(f"도매꾹 상품 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size}, 최대 페이지: {max_pages})")
+            
+            all_products = []
+            
+            for page in range(1, max_pages + 1):
+                logger.info(f"페이지 {page} 수집 중...")
+                
+                products = await self.collect_products(
+                    account_name=account_name,
+                    market=market,
+                    size=batch_size,
+                    page=page,
+                    **kwargs
+                )
+                
+                if not products:
+                    logger.info(f"페이지 {page}에서 상품을 찾지 못했습니다. 수집을 종료합니다.")
+                    break
+                
+                all_products.extend(products)
+                logger.info(f"페이지 {page} 완료: {len(products)}개 상품")
+                
+                # API 호출 간격 조절
+                await asyncio.sleep(0.5)
+            
+            logger.info(f"도매꾹 배치 수집 완료: 총 {len(all_products)}개 상품")
+            return all_products
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"도매꾹 배치 수집 실패: {account_name}")
+            return []
+
+
+class DomaemaeDataStorage:
+    """도매꾹 데이터 저장 서비스"""
+    
+    def __init__(self, db_service: DatabaseService):
+        self.db_service = db_service
+        self.error_handler = ErrorHandler()
+    
+    async def _get_supplier_id(self, supplier_code: str) -> str:
+        """공급사 ID 조회"""
+        try:
+            result = await self.db_service.select_data(
+                "suppliers",
+                {"code": supplier_code}
+            )
+            if result:
+                return result[0]["id"]
+            else:
+                raise ValueError(f"공급사를 찾을 수 없습니다: {supplier_code}")
+        except Exception as e:
+            self.error_handler.log_error(e, f"공급사 ID 조회 실패: {supplier_code}")
+            raise
+    
+    async def _get_supplier_account_id(self, supplier_code: str, account_name: str) -> str:
+        """공급사 계정 ID 조회"""
+        try:
+            supplier_id = await self._get_supplier_id(supplier_code)
+            result = await self.db_service.select_data(
+                "supplier_accounts",
+                {"supplier_id": supplier_id, "account_name": account_name}
+            )
+            if result:
+                return result[0]["id"]
+            else:
+                raise ValueError(f"공급사 계정을 찾을 수 없습니다: {supplier_code}/{account_name}")
+        except Exception as e:
+            self.error_handler.log_error(e, f"공급사 계정 ID 조회 실패: {supplier_code}/{account_name}")
+            raise
+    
+    def _calculate_hash(self, data: Dict[str, Any]) -> str:
+        """데이터 해시 계산"""
+        import hashlib
+        import json
+        data_str = json.dumps(data, sort_keys=True, ensure_ascii=False)
+        return hashlib.md5(data_str.encode('utf-8')).hexdigest()
+    
+    async def save_products(self, products: List[Dict[str, Any]]) -> int:
+        """상품 데이터 저장"""
+        try:
+            if not products:
+                logger.info("저장할 상품 데이터가 없습니다")
+                return 0
+            
+            logger.info(f"도매꾹 상품 데이터 저장 시작: {len(products)}개")
+            
+            saved_count = 0
+            for product in products:
+                try:
+                    # 원본 데이터 저장 (raw_product_data 테이블)
+                    raw_data = {
+                        "supplier_id": await self._get_supplier_id("domaemae"),
+                        "supplier_account_id": await self._get_supplier_account_id("domaemae", product["account_name"]),
+                        "raw_data": json.dumps(product, ensure_ascii=False),
+                        "collection_method": "api",
+                        "collection_source": "https://domeggook.com/ssl/api/",
+                        "supplier_product_id": product["supplier_key"],
+                        "is_processed": False,
+                        "data_hash": self._calculate_hash(product),
+                        "metadata": json.dumps({
+                            "collected_at": product["collected_at"],
+                            "account_name": product["account_name"],
+                            "market": product.get("market", "")
+                        }, ensure_ascii=False)
+                    }
+                    
+                    # 기존 데이터 확인
+                    existing = await self.db_service.select_data(
+                        "raw_product_data",
+                        {"supplier_product_id": product["supplier_key"]}
+                    )
+                    
+                    if existing:
+                        # 업데이트
+                        update_result = await self.db_service.update_data(
+                            "raw_product_data",
+                            {"supplier_product_id": product["supplier_key"]},
+                            raw_data
+                        )
+                        if update_result:
+                            logger.debug(f"도매꾹 상품 데이터 업데이트: {product['supplier_key']}")
+                        else:
+                            logger.warning(f"도매꾹 상품 데이터 업데이트 실패 (레코드 없음): {product['supplier_key']}")
+                            # 업데이트 실패 시 새로 삽입 시도
+                            await self.db_service.insert_data("raw_product_data", raw_data)
+                            logger.debug(f"도매꾹 상품 데이터 삽입 (업데이트 실패 후): {product['supplier_key']}")
+                    else:
+                        # 새로 삽입
+                        await self.db_service.insert_data("raw_product_data", raw_data)
+                        logger.debug(f"도매꾹 상품 데이터 삽입: {product['supplier_key']}")
+                    
+                    saved_count += 1
+                    
+                except Exception as e:
+                    self.error_handler.log_error(e, f"도매꾹 상품 저장 실패: {product.get('supplier_key', 'Unknown')}")
+                    continue
+            
+            logger.info(f"도매꾹 상품 데이터 저장 완료: {saved_count}개")
+            return saved_count
+        except Exception as e:
+            self.error_handler.log_error(e, "도매꾹 상품 데이터 저장 실패")
+            return 0
