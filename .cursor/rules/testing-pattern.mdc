@@ -1,0 +1,83 @@
+---
+description: Testing patterns and conventions for the project
+globs: test_*.py,tests/**
+---
+# Testing Pattern Guide
+
+## Test Script Naming Convention
+- `test_{feature}_integration.py` - Integration tests with real APIs
+- `test_{feature}.py` - Unit tests
+- Located in project root for easy execution
+
+## Test Script Template
+```python
+#!/usr/bin/env python3
+"""
+Feature Test Description
+"""
+
+import asyncio
+import sys
+import os
+from loguru import logger
+
+# Add project root to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.services.database_service import DatabaseService
+# Import other services as needed
+
+async def test_feature():
+    """Test description"""
+    try:
+        logger.info("Test starting...")
+        
+        # Initialize services
+        db_service = DatabaseService()
+        
+        # Test implementation
+        
+        logger.info("✅ Test completed successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Test failed: {e}")
+        raise
+
+if __name__ == "__main__":
+    asyncio.run(test_feature())
+```
+
+## Existing Test Scripts
+- [test_domaemae_integration.py](mdc:test_domaemae_integration.py) - Domaemae API and data collection
+- [test_ownerclan_integration.py](mdc:test_ownerclan_integration.py) - OwnerClan API integration
+- [test_zentrade_integration.py](mdc:test_zentrade_integration.py) - Zentrade API integration
+- [test_order_tracking_service.py](mdc:test_order_tracking_service.py) - Order tracking system
+- [test_data_normalization.py](mdc:test_data_normalization.py) - Data normalization pipeline
+- [test_bulk_data_processing.py](mdc:test_bulk_data_processing.py) - Bulk data processing
+
+## Testing Best Practices
+1. **Always test after implementing new connectors**
+2. **Use small limits for initial tests** (e.g., `limit=10`)
+3. **Check database state before and after tests**
+4. **Log important metrics** (count, speed, errors)
+5. **Clean up test data if needed**
+
+## Running Tests
+```bash
+# Individual test
+python test_feature_integration.py
+
+# With specific Python version
+python3.12 test_feature_integration.py
+```
+
+## Test Data Sources
+- Development Supabase project: `vecvkvumzhldioifgbxb`
+- Use test accounts in `supplier_accounts` table
+- Sample data in `data/` directory (if applicable)
+
+## Performance Metrics to Track
+- Collection speed (items/second)
+- Processing speed (items/second)
+- Success/failure rates
+- Database query times

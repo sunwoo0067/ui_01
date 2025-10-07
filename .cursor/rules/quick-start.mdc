@@ -1,0 +1,104 @@
+---
+alwaysApply: true
+---
+# Quick Start Guide for AI Assistants
+
+## 🚀 First Steps (ALWAYS DO THIS)
+1. **Read** [.ai/DEVELOPMENT.md](mdc:.ai/DEVELOPMENT.md) - Main guide
+2. **Check** [.ai/PLAN.md](mdc:.ai/PLAN.md) - Current progress
+3. **Review** recent Git commits - Understand recent changes
+
+## 📁 Project Structure (Key Locations)
+```
+ui_01/
+├── .ai/                          # 📚 DOCUMENTATION (READ FIRST!)
+│   ├── DEVELOPMENT.md            # ⭐ Single source of truth
+│   ├── PLAN.md                   # 📋 Roadmap and progress
+│   ├── ARCHITECTURE.md           # 🏗️ System design
+│   └── CODING_RULES.md           # 📝 Code standards
+├── src/
+│   ├── services/
+│   │   ├── connectors/           # 🔌 Supplier API connectors
+│   │   ├── *_data_collector.py   # 📥 Data collection services
+│   │   ├── product_pipeline.py   # ⚙️ Data normalization
+│   │   └── database_service.py   # 💾 Database operations
+│   └── utils/                    # 🛠️ Utilities
+├── database/migrations/          # 🗄️ Database schema
+├── test_*.py                     # 🧪 Test scripts
+└── .cursor/rules/                # 📜 Cursor-specific rules
+```
+
+## 🎯 Common Tasks
+
+### Add New Supplier Connector
+1. Create `src/services/connectors/examples/{supplier}.py`
+2. Inherit from `APIConnector`, `ExcelConnector`, or `WebCrawlingConnector`
+3. Implement `transform_product()` method
+4. Register in `src/services/connectors/factory.py`
+5. Create test script: `test_{supplier}_integration.py`
+6. Update [.ai/PLAN.md](mdc:.ai/PLAN.md)
+
+### Fix Database Issues
+1. Check schema: `mcp_Supabase_MCP_Server_list_tables`
+2. Verify column names (NO `metadata` in `normalized_products`!)
+3. Credentials in `supplier_accounts.account_credentials` (JSONB)
+4. Raw data might be TEXT (JSON string) - parse first
+
+### Process Collected Data
+```python
+from src.services.product_pipeline import ProductPipeline
+
+pipeline = ProductPipeline()
+# Batch process
+result = await pipeline.process_all_unprocessed(limit=100)
+```
+
+## ⚡ Quick Commands
+```bash
+# Run integration test
+python test_{supplier}_integration.py
+
+# Process raw data
+python test_data_normalization.py
+
+# Bulk processing
+python test_bulk_data_processing.py
+
+# Check Git status
+git status
+```
+
+## ⚠️ Critical Reminders
+- ✅ **ALWAYS** check `.ai/` docs before making changes
+- ✅ **TEST** changes with dedicated test scripts
+- ✅ **TAG** commits with `[Claude Code]` or your editor
+- ✅ **AWAIT** all async methods
+- ✅ **PARSE** JSON strings before using as dict
+- ❌ **NEVER** commit `.env` or credentials
+- ❌ **NEVER** use `metadata` column (use `attributes`)
+- ❌ **NEVER** look for credentials in `suppliers` table
+
+## 🆘 Need Help?
+1. Check [common-pitfalls.mdc](mdc:.cursor/rules/common-pitfalls.mdc)
+2. Review [database-operations.mdc](mdc:.cursor/rules/database-operations.mdc)
+3. Read [supplier-connectors.mdc](mdc:.cursor/rules/supplier-connectors.mdc)
+4. Consult [.ai/DEVELOPMENT.md](mdc:.ai/DEVELOPMENT.md)
+
+## 📊 Current System Status (2025-10-07)
+- **Architecture**: Database-centric (NOT marketplace-focused)
+- **Suppliers**: OwnerClan, Zentrade, Domaemae (3 active + API integration complete)
+- **Raw Data**: ~2,000 items collected
+- **REST API Server**: ✅ Complete (FastAPI)
+- **AI Price Prediction**: ✅ Complete (ML models)
+- **Competitor Data Collection**: ✅ Complete (Coupang, Naver)
+- **Order Tracking**: ✅ Complete (Domaemae)
+- **Database**: Supabase (project: vecvkvumzhldioifgbxb)
+
+## 🎯 Next Priority (CRITICAL - READ .ai/PLAN.md!)
+**DO NOT create web dashboard yet!** Follow database-centric architecture:
+1. **Add more supplier integrations** (other wholesale suppliers)
+2. **Enhance marketplace competitor data collection** (real Coupang/Naver data)
+3. **Implement transaction system** (orders/inventory/payments)
+4. **Web dashboard comes LATER** after backend is mature
+
+ALWAYS check [.ai/PLAN.md](mdc:.ai/PLAN.md) line 420-441 for current priorities!

@@ -1,0 +1,111 @@
+---
+description: Git workflow and commit conventions for multi-AI editor environment
+---
+# Git Workflow - Multi-AI Editor Environment
+
+## Commit Message Format
+```
+<type>: <subject> [Claude Code]
+
+<body>
+
+<footer>
+```
+
+### Types
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Code style changes (formatting, etc.)
+- `refactor`: Code refactoring
+- `test`: Test additions/changes
+- `chore`: Maintenance tasks
+
+### Example
+```
+feat: Add Zentrade API connector [Claude Code]
+
+- Implement ZentradeConnector class
+- Add XML API response parsing
+- Create integration test script
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+```
+
+## Branch Strategy
+- `master` - Main development branch
+- Feature branches for major changes (optional)
+
+## Before Committing
+1. ✅ Review staged changes: `git status` and `git diff`
+2. ✅ Run relevant tests
+3. ✅ Check for linter errors
+4. ✅ Update documentation if needed
+5. ✅ Update [.ai/PLAN.md](mdc:.ai/PLAN.md) for major features
+
+## Commit Requirements
+- **Always tag with editor**: `[Claude Code]`, `[Cursor]`, `[Windsurf]`, or `[Cline]`
+- **Include Co-Authored-By** for AI-assisted commits
+- **Add 🤖 emoji** to indicate AI generation
+- **Reference issues** if applicable: `Closes #123`
+
+## Files to Always Include in Commits
+- Source code changes
+- Related test files
+- Updated `.ai/PLAN.md` (for major features)
+- Migration files (if database schema changed)
+
+## Files to NEVER Commit
+- `.env` files (use `.env.example` instead)
+- `__pycache__/` directories
+- `*.pyc` files
+- `node_modules/`
+- `.mcp.local.json` (user-specific MCP config)
+- Personal API keys or credentials
+
+## Multi-Editor Collaboration
+1. **Pull before starting**: `git pull` to get latest changes
+2. **Check last commit**: See which editor made the last change
+3. **Coordinate major changes**: Update `.ai/DEVELOPMENT.md` for team awareness
+4. **Resolve conflicts**: Favor newer changes, communicate with team
+
+## Useful Git Commands
+```bash
+# Review changes
+git status
+git diff
+
+# Stage and commit
+git add <files>
+git commit -m "type: message [Editor]"
+
+# Push changes
+git push
+
+# View history
+git log --oneline --graph --all
+
+# Check current branch
+git branch
+```
+
+## Emergency Procedures
+### Undo Last Commit (Not Pushed)
+```bash
+git reset --soft HEAD~1  # Keep changes staged
+git reset HEAD~1         # Keep changes unstaged
+```
+
+### Revert Pushed Commit
+```bash
+git revert <commit-hash>  # Create new commit that undoes changes
+```
+
+## Code Review Checklist
+- [ ] Code follows [.ai/CODING_RULES.md](mdc:.ai/CODING_RULES.md)
+- [ ] Tests pass
+- [ ] Documentation updated
+- [ ] No sensitive data included
+- [ ] Commit message follows format
+- [ ] [.ai/PLAN.md](mdc:.ai/PLAN.md) updated if needed

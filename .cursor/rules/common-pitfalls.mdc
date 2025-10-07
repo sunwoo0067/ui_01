@@ -1,0 +1,173 @@
+---
+alwaysApply: true
+---
+# Common Pitfalls and Solutions
+
+## ⚠️ MOST CRITICAL PITFALL (2025-10-07)
+
+### ❌ Assuming Next Step is Frontend/Web Dashboard
+**WRONG**: "REST API is done → Let's build the web dashboard!"
+
+**CORRECT**: Check [.ai/PLAN.md](mdc:.ai/PLAN.md) line 420-441 for current priorities:
+1. **Additional supplier integrations** (HIGH)
+2. **Enhanced competitor data collection** (HIGH)
+3. **Transaction system implementation** (MEDIUM)
+4. **Web dashboard** (LATER - after backend is mature)
+
+**Why**: Project follows database-centric architecture. Backend data collection and processing systems must be robust BEFORE building frontend.
+
+## ⚠️ Critical Issues to Avoid
+
+### 1. Database Schema Mismatches
+❌ **WRONG**: Using `metadata` column in `normalized_products`
+```python
+product = {
+    'title': 'Product',
+    'metadata': {'key': 'value'}  # Column doesn't exist!
+}
+```
+
+✅ **CORRECT**: Using `attributes` JSONB column
+```python
+product = {
+    'title': 'Product',
+    'attributes': {'key': 'value'}  # Correct column
+}
+```
+
+### 2. Credentials Location
+❌ **WRONG**: Looking in `suppliers.credentials`
+```python
+credentials = supplier['credentials']  # Usually NULL
+```
+
+✅ **CORRECT**: Getting from `supplier_accounts`
+```python
+# In product_pipeline.py _get_supplier method
+account = await db.select_data(
+    "supplier_accounts",
+    {"supplier_id": supplier_id, "is_active": True}
+)
+credentials = json.loads(account['account_credentials'])
+```
+
+### 3. JSON String vs Dict Handling
+❌ **WRONG**: Assuming raw_data is always dict
+```python
+title = raw_product.get('title')  # Fails if string
+```
+
+✅ **CORRECT**: Checking type first
+```python
+if isinstance(raw_product, str):
+    import json
+    raw_product = json.loads(raw_product)
+title = raw_product.get('title')
+```
+
+### 4. Async/Await Mistakes
+❌ **WRONG**: Not awaiting async methods
+```python
+result = connector.transform_product(data)  # Returns coroutine!
+```
+
+✅ **CORRECT**: Always await
+```python
+result = await connector.transform_product(data)
+```
+
+### 5. Connector Registration
+❌ **WRONG**: Creating connector but not registering
+```python
+# Connector file exists but not in factory
+```
+
+✅ **CORRECT**: Add to factory.py
+```python
+from .examples.myconnector import MyConnector
+
+_connectors = {
+    "my_supplier": MyConnector,
+}
+```
+
+## 🔍 Debugging Checklist
+
+### Pipeline Not Processing Data
+1. [ ] Check `is_processed` flag in `raw_product_data`
+2. [ ] Verify supplier code matches connector key in factory
+3. [ ] Confirm credentials exist in `supplier_accounts`
+4. [ ] Check connector is registered in factory
+5. [ ] Look for errors in logs
+
+### Data Collection Failing
+1. [ ] Verify API credentials are correct
+2. [ ] Check API endpoint is accessible
+3. [ ] Confirm supplier account is `is_active=true`
+4. [ ] Review API rate limits
+5. [ ] Check network connectivity
+
+### Database Errors
+1. [ ] Confirm table exists: `mcp_Supabase_MCP_Server_list_tables`
+2. [ ] Check column names match schema
+3. [ ] Verify foreign key relationships
+4. [ ] Ensure UUID format is correct
+5. [ ] Check for constraint violations
+
+## 📊 Performance Issues
+
+### Slow Normalization
+**Symptom**: Processing <1 item/sec
+**Causes**:
+- Too many database round trips
+- Inefficient JSON parsing
+- Missing indexes
+
+**Solutions**:
+- Batch database operations
+- Cache supplier configurations
+- Add database indexes
+
+### Memory Issues
+**Symptom**: Script crashes with large batches
+**Solutions**:
+- Reduce batch size (50-100 items)
+- Process in smaller chunks
+- Clear processed items from memory
+
+## 🚨 Emergency Procedures
+
+### Reset Processed Flags
+```sql
+-- BE CAREFUL: This resets ALL processing
+UPDATE raw_product_data 
+SET is_processed = false, processed_at = NULL;
+```
+
+### Clear Test Data
+```sql
+-- Remove test products
+DELETE FROM normalized_products 
+WHERE supplier_id = 'test-supplier-id';
+
+DELETE FROM raw_product_data 
+WHERE supplier_id = 'test-supplier-id';
+```
+
+### Check System Status
+```python
+# Quick health check
+from src.services.database_service import DatabaseService
+
+db = DatabaseService()
+total_raw = await db.select_data("raw_product_data", {})
+processed = await db.select_data("raw_product_data", {"is_processed": True})
+
+print(f"Total: {len(total_raw)}, Processed: {len(processed)}")
+```
+
+## 📚 Reference Files for Issues
+- Schema issues → [.ai/SUPABASE_GUIDE.md](mdc:.ai/SUPABASE_GUIDE.md)
+- Coding issues → [.ai/CODING_RULES.md](mdc:.ai/CODING_RULES.md)
+- Architecture issues → [.ai/ARCHITECTURE.md](mdc:.ai/ARCHITECTURE.md)
+- MCP issues → [.ai/MCP_GUIDE.md](mdc:.ai/MCP_GUIDE.md)

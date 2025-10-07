@@ -1,0 +1,61 @@
+---
+alwaysApply: true
+---
+# Project Architecture - Multi-Supplier E-commerce Platform
+
+## 🎯 CRITICAL ARCHITECTURE PRINCIPLE (2025-10-07)
+
+**Database-Centric Architecture** - NOT marketplace-focused!
+
+### Current Phase
+- ✅ Backend data collection and processing systems
+- ✅ REST API server infrastructure
+- ⏳ Additional supplier integrations (CURRENT PRIORITY)
+- ⏳ Enhanced competitor data collection
+- ⏳ Transaction system implementation
+- ⏸️ Web dashboard/frontend (LATER - not now!)
+
+## Core Architecture
+This project uses a **Database-Centric Architecture** with Supabase as the backend.
+
+### Key Components
+1. **Data Collection Layer**: `src/services/connectors/` - Supplier-specific API connectors
+2. **Data Processing Layer**: `src/services/product_pipeline.py` - Raw data to normalized products
+3. **Database Layer**: Supabase PostgreSQL with MCP integration
+4. **Service Layer**: `src/services/` - Business logic and data management
+5. **API Layer**: `src/api/` - REST API endpoints (FastAPI)
+6. **AI/ML Layer**: `src/services/ai_*.py` - Price prediction and market analysis
+
+### Data Flow (Updated 2025-10-07)
+```
+Supplier API → Connector → raw_product_data (DB)
+           → Product Pipeline → normalized_products (DB)
+           → Competitor Analysis → AI Price Prediction
+           → Transaction Processing
+           → (Future) Marketplace Listing
+```
+
+## Critical Files
+- [.ai/PLAN.md](mdc:.ai/PLAN.md) - **CHECK LINE 420-441 FOR CURRENT PRIORITIES!**
+- [.ai/DEVELOPMENT.md](mdc:.ai/DEVELOPMENT.md) - Main development guide (ALWAYS CHECK FIRST)
+- [.ai/ARCHITECTURE.md](mdc:.ai/ARCHITECTURE.md) - Detailed architecture documentation
+- [.ai/CODING_RULES.md](mdc:.ai/CODING_RULES.md) - Python coding standards (PEP 8)
+
+## Database Tables (Priority Order)
+1. `suppliers` - Supplier configurations
+2. `supplier_accounts` - API credentials (JSONB format)
+3. `raw_product_data` - Unprocessed supplier data
+4. `normalized_products` - Processed, standardized products
+5. `order_tracking` - Order status tracking
+6. `competitor_products` - Competitor data from marketplaces
+7. `price_predictions` - AI-generated price predictions
+8. `market_trend_analysis` - Market trend insights
+9. `supplier_points_balance` - Supplier points payment system
+
+## Key Principles
+- **ALWAYS check `.ai/PLAN.md` (line 420-441) for current priorities**
+- **Reference `.ai/` docs BEFORE making changes**
+- **All database operations through Supabase MCP**
+- **Test changes with dedicated test scripts**
+- **Tag commits with `[Cursor]` or appropriate editor**
+- **Focus on backend/data systems BEFORE frontend**

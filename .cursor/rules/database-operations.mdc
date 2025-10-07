@@ -1,0 +1,86 @@
+---
+description: Database operations and Supabase MCP integration guidelines
+globs: src/services/database_service.py,src/services/*_service.py,database/**
+---
+# Database Operations Guide
+
+## Database Access Methods
+
+### Primary Method: Supabase MCP
+Use MCP tools for database operations:
+- `mcp_Supabase_MCP_Server_execute_sql` - Raw SQL queries
+- `mcp_Supabase_MCP_Server_apply_migration` - DDL operations
+- `mcp_Supabase_MCP_Server_list_tables` - Schema inspection
+
+### Secondary Method: DatabaseService
+Use [src/services/database_service.py](mdc:src/services/database_service.py) for programmatic access:
+```python
+from src.services.database_service import DatabaseService
+
+db_service = DatabaseService()
+await db_service.select_data("table_name", {"column": "value"})
+```
+
+## Critical Database Tables
+
+### suppliers
+```sql
+- id: UUID
+- name: TEXT
+- code: TEXT (unique, used for connector lookup)
+- type: TEXT ('api', 'excel', 'web_crawling')
+- api_endpoint: TEXT
+- is_active: BOOLEAN
+```
+
+### supplier_accounts
+```sql
+- id: UUID
+- supplier_id: UUID
+- account_name: TEXT
+- account_credentials: JSONB  -- Store as: {"api_key": "...", "api_secret": "..."}
+- is_active: BOOLEAN
+```
+
+### raw_product_data
+```sql
+- id: UUID
+- supplier_id: UUID
+- supplier_account_id: UUID
+- raw_data: JSONB or TEXT  -- Original supplier data (may be JSON string)
+- supplier_product_id: TEXT
+- is_processed: BOOLEAN
+- collection_method: TEXT
+```
+
+### normalized_products
+```sql
+- id: UUID
+- raw_data_id: UUID
+- supplier_id: UUID
+- title, description, price, cost_price, etc.
+- attributes: JSONB  -- Additional fields (NOT metadata)
+- status: TEXT
+```
+
+### order_tracking
+```sql
+- id: UUID
+- order_id: TEXT (unique)
+- supplier_id, supplier_account_id: UUID
+- current_status: TEXT
+- status_history: JSONB
+- order_details: JSONB
+```
+
+## Migration Pattern
+1. Create migration: `database/migrations/XXX_migration_name.sql`
+2. Apply via MCP: `mcp_Supabase_MCP_Server_apply_migration`
+3. Test with appropriate test script
+
+## Common Pitfalls
+- ❌ NO `metadata` column in `normalized_products` - use `attributes`
+- ❌ Credentials NOT in `suppliers.credentials` - use `supplier_accounts.account_credentials`
+- ❌ Raw data may be TEXT (JSON string) - always parse before using
+- ✅ Always check `is_processed` flag before reprocessing
+- ✅ Use transactions for multi-table operations

@@ -1,0 +1,150 @@
+---
+description: Data collection and processing pipeline guidelines
+globs: src/services/product_pipeline.py,src/services/*_data_collector.py
+---
+# Data Collection and Processing Pipeline
+
+## Pipeline Overview
+
+### Stage 1: Data Collection
+**Location**: Supplier-specific data collectors
+- [src/services/ownerclan_data_collector.py](mdc:src/services/ownerclan_data_collector.py)
+- [src/services/zentrade_data_collector.py](mdc:src/services/zentrade_data_collector.py)
+- [src/services/domaemae_data_collector.py](mdc:src/services/domaemae_data_collector.py)
+
+**Output**: `raw_product_data` table (unprocessed)
+
+### Stage 2: Data Normalization
+**Location**: [src/services/product_pipeline.py](mdc:src/services/product_pipeline.py)
+
+**Process**:
+1. Fetch raw data from `raw_product_data`
+2. Get supplier configuration and credentials
+3. Create appropriate connector
+4. Transform via `connector.transform_product()`
+5. Save to `normalized_products`
+6. Mark raw data as processed
+
+### Stage 3: Quality Validation
+**Location**: Quality checks in pipeline
+
+**Validates**:
+- Required fields present
+- Data types correct
+- Price values reasonable
+- Image URLs valid
+
+## Product Pipeline API
+
+### Process Single Item
+```python
+from src.services.product_pipeline import ProductPipeline
+from uuid import UUID
+
+pipeline = ProductPipeline()
+result = await pipeline.process_raw_data(
+    raw_data_id=UUID("..."),
+    auto_list=False
+)
+```
+
+### Batch Processing
+```python
+# Process all unprocessed items
+result = await pipeline.process_all_unprocessed(limit=100)
+
+# Process for specific supplier
+result = await pipeline.process_all_unprocessed(
+    supplier_id=UUID("..."),
+    limit=100
+)
+```
+
+## Data Collection API
+
+### Collect Products
+```python
+from src.services.ownerclan_data_collector import OwnerClanDataCollector
+
+collector = OwnerClanDataCollector()
+products = await collector.collect_products(
+    account_name="account",
+    limit=100,
+    search_keyword="상품"
+)
+
+# Save to database
+await collector.save_products(products, "supplier_code")
+```
+
+## Important Considerations
+
+### Raw Data Storage
+- Store original API response as-is
+- May be JSONB or TEXT (JSON string)
+- Don't modify original data
+- Include collection metadata
+
+### Data Transformation
+- Handle both dict and JSON string inputs
+- Parse JSON strings: `json.loads()` if needed
+- Validate required fields
+- Provide default values for optional fields
+- Log transformation errors
+
+### Batch Processing
+- Use reasonable batch sizes (50-200 items)
+- Log progress regularly
+- Handle errors gracefully (don't stop entire batch)
+- Track success/failure rates
+
+### Performance
+- Current speeds:
+  - OwnerClan: ~100 items/sec collection
+  - Zentrade: ~50 items/sec collection
+  - Domaemae: ~135 items/sec collection
+  - Normalization: ~0.5 items/sec (needs optimization)
+
+### Error Handling
+```python
+from src.utils.error_handler import ErrorHandler
+
+try:
+    result = await collector.collect_products(...)
+except Exception as e:
+    ErrorHandler.log_error(e, {
+        "operation": "collect_products",
+        "supplier": "supplier_name"
+    })
+    # Decide: retry, skip, or raise
+```
+
+## Testing Pipeline
+```bash
+# Test data collection
+python test_{supplier}_integration.py
+
+# Test normalization
+python test_data_normalization.py
+
+# Test bulk processing
+python test_bulk_data_processing.py
+```
+
+## Common Issues
+
+### Issue: "JSON object must be str, bytes or bytearray, not dict"
+**Cause**: raw_data already parsed as dict, trying to parse again
+**Fix**: Check if string before parsing
+```python
+if isinstance(raw_data, str):
+    raw_data = json.loads(raw_data)
+```
+
+### Issue: "Column 'metadata' does not exist"
+**Cause**: Trying to save metadata as separate column
+**Fix**: Include in `attributes` JSONB field instead
+
+### Issue: Credentials not found
+**Cause**: Looking in wrong table or wrong format
+**Fix**: Get from `supplier_accounts.account_credentials` (JSONB)

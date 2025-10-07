@@ -1,0 +1,133 @@
+---
+globs: *.py,src/**/*.py
+---
+# Python Coding Standards
+
+## Code Style (Based on [.ai/CODING_RULES.md](mdc:.ai/CODING_RULES.md))
+
+### Naming Conventions
+- **Files**: `snake_case.py` (e.g., `product_pipeline.py`)
+- **Classes**: `PascalCase` (e.g., `ProductPipeline`)
+- **Functions/Variables**: `snake_case` (e.g., `process_raw_data`)
+- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_RETRIES`)
+- **Private methods**: `_snake_case` (e.g., `_get_supplier`)
+
+### Code Structure
+```python
+"""
+Module docstring explaining purpose
+"""
+
+# Standard library imports
+import asyncio
+import json
+from typing import Dict, List, Optional
+from datetime import datetime
+
+# Third-party imports
+from loguru import logger
+from uuid import UUID
+
+# Local imports
+from src.services.database_service import DatabaseService
+from src.utils.error_handler import ErrorHandler
+
+
+class MyService:
+    """Class docstring"""
+    
+    def __init__(self, param: str):
+        """Initialize with parameters"""
+        self.param = param
+    
+    async def public_method(self) -> Dict:
+        """Public async method"""
+        try:
+            result = await self._private_method()
+            return {"status": "success", "data": result}
+        except Exception as e:
+            ErrorHandler.log_error(e, {"context": "operation"})
+            raise
+    
+    async def _private_method(self) -> Any:
+        """Private helper method"""
+        pass
+```
+
+### Error Handling
+```python
+from src.utils.error_handler import ErrorHandler
+
+try:
+    # Operation
+    result = await some_operation()
+except Exception as e:
+    ErrorHandler.log_error(e, {"context": "description"})
+    raise  # Re-raise for caller to handle
+```
+
+### Logging
+```python
+from loguru import logger
+
+logger.info("Operation starting...")
+logger.warning("Potential issue detected")
+logger.error("Operation failed", exc_info=True)
+logger.debug("Detailed debugging info")
+```
+
+### Async/Await
+- Use `async def` for all database operations
+- Use `await` for all async calls
+- Don't forget `asyncio.run()` in main blocks
+
+### Type Hints
+Always use type hints for better code clarity:
+```python
+from typing import Dict, List, Optional, Any
+from uuid import UUID
+
+async def process_data(
+    supplier_id: UUID, 
+    limit: int = 100
+) -> Dict[str, Any]:
+    """Process with type hints"""
+    pass
+```
+
+## Common Patterns
+
+### Database Operations
+```python
+# Select
+data = await db_service.select_data("table", {"column": "value"})
+
+# Insert
+await db_service.insert_data("table", {"column": "value"})
+
+# Update
+await db_service.update_data("table", {"column": "new_value"}, {"id": "uuid"})
+```
+
+### Connector Pattern
+```python
+class MyConnector(APIConnector):
+    async def transform_product(self, raw_product: Any) -> Dict:
+        """Transform with JSON string handling"""
+        # Handle JSON string input
+        if isinstance(raw_product, str):
+            import json
+            raw_product = json.loads(raw_product)
+        
+        return {
+            'supplier_product_id': str(raw_product.get('id', '')),
+            # ... other fields
+        }
+```
+
+## Code Quality
+- Max line length: 100 characters
+- Max function length: 50 lines (split if longer)
+- Max parameters: 3 (use objects for more)
+- Always include docstrings for public methods
+- Use descriptive variable names (no single letters except i, j in loops)

@@ -1,0 +1,61 @@
+---
+description: Guide for working with supplier API connectors and data collection
+globs: src/services/connectors/**,src/services/*_data_collector.py
+---
+# Supplier Connector Development Guide
+
+## Connector Pattern
+All supplier connectors inherit from base classes in [src/services/connectors/base.py](mdc:src/services/connectors/base.py)
+
+### Base Connector Types
+1. `APIConnector` - For REST/SOAP APIs
+2. `ExcelConnector` - For Excel file imports
+3. `WebCrawlingConnector` - For web scraping
+
+## Implemented Connectors
+- **OwnerClanConnector**: [src/services/connectors/examples/ownerclan.py](mdc:src/services/connectors/examples/ownerclan.py)
+- **ZentradeConnector**: [src/services/connectors/examples/zentrade.py](mdc:src/services/connectors/examples/zentrade.py)
+- **DomaeMaeConnector**: [src/services/connectors/examples/domaemae.py](mdc:src/services/connectors/examples/domaemae.py)
+
+## Connector Registration
+Add new connectors to [src/services/connectors/factory.py](mdc:src/services/connectors/factory.py):
+
+```python
+from .examples.your_connector import YourConnector
+
+_connectors: Dict[str, Type[SupplierConnector]] = {
+    "your_supplier_code": YourConnector,
+}
+```
+
+## Data Transformation Requirements
+All `transform_product()` methods must return:
+```python
+{
+    'supplier_product_id': str,
+    'title': str,
+    'description': str,
+    'price': float,
+    'cost_price': float,
+    'currency': str,
+    'category': str,
+    'brand': str,
+    'stock_quantity': int,
+    'status': str,
+    'images': list,
+    'attributes': dict,  # NOT 'metadata'
+}
+```
+
+## Important Notes
+- Handle both dict and JSON string inputs in `transform_product()`
+- Always add JSON parsing check: `if isinstance(raw_product, str): raw_product = json.loads(raw_product)`
+- Credentials come from `supplier_accounts.account_credentials` (JSONB)
+- Test with dedicated test script: `test_{supplier}_integration.py`
+
+## Data Collection Pattern
+1. Initialize connector with credentials from database
+2. Collect raw data via supplier API
+3. Store in `raw_product_data` table (as-is)
+4. Process via Product Pipeline for normalization
+5. Save to `normalized_products` table
