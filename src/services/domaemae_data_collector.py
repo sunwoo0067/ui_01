@@ -374,11 +374,16 @@ class DomaemaeDataCollector:
         """상품 데이터 배치 수집 (단일 시장)"""
         try:
             market_name = self.market_info[market]["name"]
-            logger.info(f"{market_name} 상품 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size}, 최대 페이지: {max_pages})")
+            logger.info(f"{market_name} 상품 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size}, 최대 페이지: {max_pages if max_pages else '무제한'})")
             
             all_products = []
+            page = 1
             
-            for page in range(1, max_pages + 1):
+            while True:
+                # max_pages가 설정되어 있으면 제한 확인
+                if max_pages and page > max_pages:
+                    break
+                
                 logger.info(f"{market_name} 페이지 {page} 수집 중...")
                 
                 products = await self.collect_products(
@@ -394,12 +399,18 @@ class DomaemaeDataCollector:
                     break
                 
                 all_products.extend(products)
-                logger.info(f"{market_name} 페이지 {page} 완료: {len(products)}개 상품")
+                logger.info(f"{market_name} 페이지 {page} 완료: {len(products)}개 상품 (누적: {len(all_products)}개)")
+                
+                # 페이지당 상품이 배치 크기보다 작으면 마지막 페이지
+                if len(products) < batch_size:
+                    logger.info(f"{market_name} 마지막 페이지 도달")
+                    break
                 
                 # API 호출 간격 조절
                 await asyncio.sleep(0.5)
+                page += 1
             
-            logger.info(f"{market_name} 배치 수집 완료: 총 {len(all_products)}개 상품")
+            logger.info(f"{market_name} 배치 수집 완료: 총 {len(all_products)}개 상품 ({page}페이지)")
             return all_products
             
         except Exception as e:

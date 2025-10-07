@@ -104,11 +104,12 @@ async def collect_ownerclan_full_catalog():
     logger.info(f"✅ GraphQL 응답 수신: {len(all_edges)}개 상품")
     logger.info(f"   응답 시간: {collection_time:.2f}초")
     
-    # 상품 데이터 변환
+    # 상품 데이터 변환 및 중복 제거
     logger.info(f"\n🔄 상품 데이터 변환 중...")
     
-    all_products = []
+    products_dict = {}  # supplier_key를 키로 사용하여 중복 제거
     inactive_count = 0
+    duplicate_count = 0
     
     for edge in all_edges:
         node = edge["node"]
@@ -120,10 +121,16 @@ async def collect_ownerclan_full_catalog():
             inactive_count += 1
             continue
         
+        supplier_key = node["key"]
+        
+        # 중복 검사 (같은 supplier_key가 이미 있으면 최신 것으로 덮어쓰기)
+        if supplier_key in products_dict:
+            duplicate_count += 1
+        
         category = node.get("category", {})
         
         product = {
-            "supplier_key": node["key"],
+            "supplier_key": supplier_key,
             "name": node.get("name", ""),
             "model": node.get("model", ""),
             "category_name": category.get("name", "") if category else "",
@@ -139,27 +146,69 @@ async def collect_ownerclan_full_catalog():
             "account_name": account_name
         }
         
-        all_products.append(product)
+        products_dict[supplier_key] = product
     
-    logger.info(f"✅ 변환 완료: {len(all_products)}개 (비활성 제외: {inactive_count}개)")
+    # dict를 list로 변환
+    all_products = list(products_dict.values())
     
-    # 데이터베이스 저장
-    logger.info(f"\n💾 데이터베이스 저장 중...")
+    logger.info(f"✅ 변환 완료: {len(all_products)}개 (비활성: {inactive_count}개, 중복 제거: {duplicate_count}개)")
     
-    saved = 0
-    new = 0
-    updated = 0
+    # 데이터베이스 배치 저장 (최적화 - 중복 사전 필터링)
+    logger.info(f"\n💾 데이터베이스 배치 저장 중...")
     
-    for idx, product in enumerate(all_products, 1):
+    # 1단계: 기존 상품 ID 목록 가져오기 (페이지네이션으로 전체 조회)
+    logger.info(f"   기존 상품 ID 조회 중...")
+    from src.services.supabase_client import supabase_client
+    
+    try:
+        existing_ids = set()
+        page_size = 10000
+        offset = 0
+        
+        while True:
+            existing_response = (
+                supabase_client.get_table("raw_product_data")
+                .select("supplier_product_id")
+                .eq("supplier_id", supplier_id)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+            
+            if not existing_response.data:
+                break
+            
+            for item in existing_response.data:
+                existing_ids.add(item['supplier_product_id'])
+            
+            if len(existing_response.data) < page_size:
+                break
+            
+            offset += page_size
+            logger.info(f"   기존 상품 조회 중... {len(existing_ids)}개")
+        
+        logger.info(f"   기존 상품: {len(existing_ids)}개")
+    except Exception as e:
+        logger.warning(f"   기존 상품 조회 실패 (전체 upsert로 진행): {e}")
+        existing_ids = set()
+    
+    # 2단계: 신규/업데이트 상품 분리
+    logger.info(f"   신규/업데이트 상품 분류 중...")
+    new_products = []
+    update_products = []
+    
+    for product in all_products:
         try:
             supplier_product_id = product.get("supplier_key", "")
             
-            data_str = json.dumps(product, sort_keys=True, ensure_ascii=False)
-            data_hash = hashlib.md5(data_str.encode('utf-8')).hexdigest()
+            # JSON 직렬화를 한 번만 수행
+            raw_data_json = json.dumps(product, ensure_ascii=False)
+            
+            # 간단한 해시 계산
+            data_hash = hashlib.md5(f"{supplier_product_id}{product.get('collected_at')}".encode()).hexdigest()
             
             raw_data = {
                 "supplier_id": supplier_id,
-                "raw_data": json.dumps(product, ensure_ascii=False),
+                "raw_data": raw_data_json,
                 "collection_method": "api",
                 "collection_source": "batch_allItems_graphql",
                 "supplier_product_id": supplier_product_id,
@@ -171,26 +220,66 @@ async def collect_ownerclan_full_catalog():
                 }, ensure_ascii=False)
             }
             
-            existing = await db.select_data(
-                "raw_product_data",
-                {"supplier_id": supplier_id, "supplier_product_id": supplier_product_id}
-            )
-            
-            if existing:
-                await db.update_data("raw_product_data", raw_data, {"id": existing[0]["id"]})
-                updated += 1
+            # 신규/업데이트 분류
+            if supplier_product_id in existing_ids:
+                update_products.append(raw_data)
             else:
-                await db.insert_data("raw_product_data", raw_data)
-                new += 1
-            
-            saved += 1
-            
-            if idx % 500 == 0:
-                logger.info(f"   진행: {idx}/{len(all_products)}개 (신규: {new}, 업데이트: {updated})")
+                new_products.append(raw_data)
                 
         except Exception as e:
-            logger.warning(f"   저장 실패: {e}")
+            logger.warning(f"   데이터 준비 실패: {e}")
             continue
+    
+    logger.info(f"   신규 상품: {len(new_products)}개, 업데이트 상품: {len(update_products)}개")
+    
+    # 3단계: 신규 상품만 대량 삽입 (훨씬 빠름)
+    saved = 0
+    new = 0
+    updated = 0
+    
+    if new_products:
+        logger.info(f"\n   신규 상품 저장 중: {len(new_products)}개")
+        batch_size = 5000
+        total_batches = (len(new_products) + batch_size - 1) // batch_size
+        
+        for i in range(0, len(new_products), batch_size):
+            chunk = new_products[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            
+            try:
+                saved_count = await db.bulk_insert("raw_product_data", chunk)
+                new += saved_count
+                saved += saved_count
+                progress = (batch_num / total_batches) * 100
+                logger.info(f"   신규 배치 {batch_num}/{total_batches}: {saved_count}개 (진행률: {progress:.1f}%)")
+            except Exception as e:
+                logger.error(f"   신규 배치 {batch_num} 실패: {e}")
+                # 실패시 upsert로 재시도 (중복 처리)
+                try:
+                    saved_count = await db.bulk_upsert("raw_product_data", chunk)
+                    new += saved_count
+                    saved += saved_count
+                except Exception as e2:
+                    logger.error(f"   upsert도 실패: {e2}")
+    
+    # 4단계: 업데이트 상품 처리 (변경된 것만)
+    if update_products:
+        logger.info(f"\n   업데이트 상품 저장 중: {len(update_products)}개")
+        batch_size = 5000
+        total_batches = (len(update_products) + batch_size - 1) // batch_size
+        
+        for i in range(0, len(update_products), batch_size):
+            chunk = update_products[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            
+            try:
+                saved_count = await db.bulk_upsert("raw_product_data", chunk)
+                updated += saved_count
+                saved += saved_count
+                progress = (batch_num / total_batches) * 100
+                logger.info(f"   업데이트 배치 {batch_num}/{total_batches}: {saved_count}개 (진행률: {progress:.1f}%)")
+            except Exception as e:
+                logger.error(f"   업데이트 배치 {batch_num} 실패: {e}")
     
     total_time = (datetime.now() - start_time).total_seconds()
     

@@ -194,6 +194,78 @@ class DatabaseService:
         except Exception as e:
             logger.error(f"데이터 upsert 실패: {e}")
             raise
+    
+    async def bulk_upsert(self, table_name: str, data_list: List[Dict[str, Any]], 
+                         on_conflict: Optional[str] = None) -> int:
+        """
+        대량 데이터 삽입 또는 업데이트 (bulk upsert)
+        
+        Args:
+            table_name: 테이블 이름
+            data_list: 데이터 리스트
+            on_conflict: 충돌 시 사용할 컬럼 (예: "supplier_id,supplier_product_id")
+            
+        Returns:
+            처리된 데이터 개수
+        """
+        try:
+            if not data_list:
+                logger.warning(f"bulk_upsert: 데이터가 비어있습니다 - {table_name}")
+                return 0
+            
+            table = self.supabase.get_table(table_name, use_service_key=True)
+            
+            # raw_product_data 테이블의 경우 기본 충돌 컬럼 설정
+            if not on_conflict and table_name == "raw_product_data":
+                on_conflict = "supplier_id,supplier_product_id"
+            
+            if on_conflict:
+                result = table.upsert(data_list, on_conflict=on_conflict).execute()
+            else:
+                result = table.upsert(data_list).execute()
+            
+            if result.data:
+                count = len(result.data)
+                logger.info(f"배치 upsert 성공: {table_name}, {count}개")
+                return count
+            else:
+                logger.warning(f"배치 upsert 결과 없음: {table_name}")
+                return 0
+                
+        except Exception as e:
+            logger.error(f"배치 upsert 실패: {table_name}, {len(data_list)}개 데이터, 에러: {e}")
+            raise
+    
+    async def bulk_insert(self, table_name: str, data_list: List[Dict[str, Any]]) -> int:
+        """
+        대량 데이터 삽입 (bulk insert)
+        
+        Args:
+            table_name: 테이블 이름
+            data_list: 데이터 리스트
+            
+        Returns:
+            삽입된 데이터 개수
+        """
+        try:
+            if not data_list:
+                logger.warning(f"bulk_insert: 데이터가 비어있습니다 - {table_name}")
+                return 0
+            
+            table = self.supabase.get_table(table_name, use_service_key=True)
+            result = table.insert(data_list).execute()
+            
+            if result.data:
+                count = len(result.data)
+                logger.info(f"배치 insert 성공: {table_name}, {count}개")
+                return count
+            else:
+                logger.warning(f"배치 insert 결과 없음: {table_name}")
+                return 0
+                
+        except Exception as e:
+            logger.error(f"배치 insert 실패: {table_name}, {len(data_list)}개 데이터, 에러: {e}")
+            raise
 
 
 # 전역 인스턴스

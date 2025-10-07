@@ -229,24 +229,11 @@ class OwnerClanDataCollector:
 
             logger.info(f"전체 상품 데이터 수집 완료: {len(all_products)}개 ({page_count}페이지)")
 
-            # 저장 서비스가 있으면 저장
+            # 저장 서비스가 있으면 저장 (한 번에 대량 저장)
             if storage_service:
-                # 배치별로 저장
-                total_saved = 0
-                save_batch_size = 1000
-
-                for i in range(0, len(all_products), save_batch_size):
-                    batch = all_products[i:i + save_batch_size]
-                    batch_num = (i // save_batch_size) + 1
-
-                    logger.info(f"저장 배치 {batch_num}: {len(batch)}개 상품 저장 중...")
-                    saved_count = await storage_service.save_products(batch)
-                    total_saved += saved_count
-                    logger.info(f"저장 배치 {batch_num} 완료: {saved_count}개 저장됨")
-
-                    await asyncio.sleep(0.1)
-
-                logger.info(f"모든 배치 저장 완료: 총 {total_saved}개 상품 저장됨")
+                logger.info(f"전체 상품 데이터 저장 시작: {len(all_products)}개")
+                total_saved = await storage_service.save_products(all_products)
+                logger.info(f"전체 상품 데이터 저장 완료: 총 {total_saved}개 상품 저장됨")
                 return total_saved
             else:
                 logger.info(f"수집만 완료 (저장 서비스 없음): {len(all_products)}개")
@@ -447,27 +434,15 @@ class OwnerClanDataCollector:
             
             logger.info(f"전체 주문 데이터 수집 완료: {len(all_orders)}개")
             
-            # 배치별로 저장
-            total_saved = 0
-            for i in range(0, len(all_orders), batch_size):
-                batch = all_orders[i:i + batch_size]
-                batch_num = (i // batch_size) + 1
-                
-                logger.info(f"배치 {batch_num} 저장 시작: {len(batch)}개 주문")
-                
-                if storage_service:
-                    saved_count = await storage_service.save_orders(batch)
-                    total_saved += saved_count
-                    logger.info(f"배치 {batch_num} 저장 완료: {saved_count}개 저장됨")
-                else:
-                    # 저장 서비스가 없으면 배치만 반환
-                    logger.info(f"배치 {batch_num} 준비 완료: {len(batch)}개 주문 (저장 서비스 없음)")
-                
-                # 배치 간 짧은 지연
-                await asyncio.sleep(0.1)
-            
-            logger.info(f"모든 배치 저장 완료: 총 {total_saved}개 주문 저장됨")
-            return total_saved
+            # 저장 서비스가 있으면 저장 (한 번에 대량 저장)
+            if storage_service:
+                logger.info(f"전체 주문 데이터 저장 시작: {len(all_orders)}개")
+                total_saved = await storage_service.save_orders(all_orders)
+                logger.info(f"전체 주문 데이터 저장 완료: 총 {total_saved}개 주문 저장됨")
+                return total_saved
+            else:
+                logger.info(f"수집만 완료 (저장 서비스 없음): {len(all_orders)}개")
+                return len(all_orders)
             
         except Exception as e:
             self.error_handler.log_error(e, f"주문 데이터 배치 수집 실패: {account_name}")

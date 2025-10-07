@@ -1,62 +1,72 @@
 #!/usr/bin/env python3
 """
-젠트레이드 전체 상품 수집 스크립트
-모든 상품을 한번에 수집
+도매꾹 전체 카탈로그 배치 수집 (최적화)
 """
 
 import asyncio
 import json
 import hashlib
 from datetime import datetime
-from typing import List, Dict, Any
 from loguru import logger
 
-from src.services.zentrade_data_collector import ZentradeDataCollector
+from src.services.domaemae_data_collector import DomaemaeDataCollector
 from src.services.database_service import DatabaseService
 
 
-async def collect_zentrade_all():
-    """젠트레이드 전체 상품 수집 (한번에)"""
+async def collect_domaemae_full_catalog():
+    """도매꾹 전체 카탈로그 배치 수집"""
     db = DatabaseService()
-    collector = ZentradeDataCollector(db)
+    collector = DomaemaeDataCollector(db)
     
-    supplier_id = "959ddf49-c25f-4ebb-a292-bc4e0f1cd28a"
+    # 도매꾹 supplier_id (데이터베이스에서 확인 필요)
+    suppliers = await db.select_data("suppliers", {"code": "domaemae"})
+    if not suppliers:
+        logger.error("도매꾹 공급사를 찾을 수 없습니다")
+        return {"status": "error"}
+    
+    supplier_id = suppliers[0]["id"]
     account_name = "test_account"
     
-    logger.info("="*60)
-    logger.info("🏢 젠트레이드 전체 상품 수집 시작")
-    logger.info("   전략: 모든 상품을 한번에 수집")
-    logger.info("="*60)
-    
-    # 현재 데이터 확인
-    existing = await db.select_data('raw_product_data', {'supplier_id': supplier_id})
-    current_count = len(existing)
-    
-    logger.info(f"현재 저장된 데이터: {current_count}개")
-    
-    # 전체 상품 수집 (품절 제외: runout=0)
-    logger.info("\n📦 젠트레이드 전체 상품 수집 중...")
-    logger.info("   옵션: runout=0 (품절 상품 제외)")
+    logger.info("="*70)
+    logger.info("🏢 도매꾹 전체 카탈로그 배치 수집")
+    logger.info("   방식: 도매꾹 + 도매매 모든 상품")
+    logger.info("="*70)
     
     start_time = datetime.now()
     
-    products = await collector.collect_products(
+    # 1. 도매꾹(dome) 상품 수집
+    logger.info("\n📦 도매꾹(dome) 상품 수집 중...")
+    dome_products = await collector.collect_products_batch(
         account_name=account_name,
-        runout=0  # 품절 제외
+        batch_size=500,
+        max_pages=None,  # 전체 수집
+        market="dome"
     )
     
+    logger.info(f"✅ 도매꾹 수집 완료: {len(dome_products)}개")
+    
+    # 2. 도매매(supply) 상품 수집
+    logger.info("\n📦 도매매(supply) 상품 수집 중...")
+    supply_products = await collector.collect_products_batch(
+        account_name=account_name,
+        batch_size=500,
+        max_pages=None,  # 전체 수집
+        market="supply"
+    )
+    
+    logger.info(f"✅ 도매매 수집 완료: {len(supply_products)}개")
+    
+    # 3. 합치기
+    all_products = dome_products + supply_products
     collection_time = (datetime.now() - start_time).total_seconds()
     
-    if not products:
-        logger.error("❌ 상품 수집 실패")
-        return {"status": "error", "message": "No products collected"}
-    
-    logger.info(f"✅ 수집 완료: {len(products)}개 상품")
-    logger.info(f"   소요 시간: {collection_time:.2f}초")
-    logger.info(f"   수집 속도: {len(products)/collection_time:.2f}개/초")
+    logger.info(f"\n✅ 전체 수집 완료: {len(all_products)}개")
+    logger.info(f"   도매꾹: {len(dome_products)}개")
+    logger.info(f"   도매매: {len(supply_products)}개")
+    logger.info(f"   수집 시간: {collection_time:.2f}초")
     
     # 데이터베이스 배치 저장 (최적화)
-    logger.info(f"\n💾 {len(products)}개 데이터 배치 저장 중...")
+    logger.info(f"\n💾 데이터베이스 배치 저장 중...")
     
     # 1단계: 기존 상품 ID 조회
     logger.info("   기존 상품 ID 조회 중...")
@@ -97,11 +107,9 @@ async def collect_zentrade_all():
     new_products = []
     update_products = []
     
-    for product in products:
+    for product in all_products:
         try:
-            supplier_product_id = product.get("supplier_key", 
-                                             product.get("id", 
-                                                        str(product.get("product_id", ""))))
+            supplier_product_id = str(product.get("item_id", ""))
             
             # JSON 직렬화를 한 번만 수행
             raw_data_json = json.dumps(product, ensure_ascii=False)
@@ -111,13 +119,14 @@ async def collect_zentrade_all():
                 "supplier_id": supplier_id,
                 "raw_data": raw_data_json,
                 "collection_method": "api",
-                "collection_source": "https://www.zentrade.co.kr/shop/proc/product_api.php",
+                "collection_source": "http://api.domaemae.co.kr/openapi",
                 "supplier_product_id": supplier_product_id,
                 "is_processed": False,
                 "data_hash": data_hash,
                 "metadata": json.dumps({
                     "collected_at": product.get("collected_at", datetime.now().isoformat()),
-                    "account_name": product.get("account_name", "")
+                    "account_name": account_name,
+                    "market": product.get("market", "")
                 }, ensure_ascii=False)
             }
             
@@ -134,9 +143,9 @@ async def collect_zentrade_all():
     logger.info(f"   신규: {len(new_products)}개, 업데이트: {len(update_products)}개")
     
     # 3단계: 배치 저장
-    saved_count = 0
-    new_count = 0
-    updated_count = 0
+    saved = 0
+    new = 0
+    updated = 0
     batch_size = 5000
     
     # 신규 상품 bulk insert
@@ -150,8 +159,8 @@ async def collect_zentrade_all():
             
             try:
                 count = await db.bulk_insert("raw_product_data", chunk)
-                new_count += count
-                saved_count += count
+                new += count
+                saved += count
                 progress = (batch_num / total_batches) * 100
                 logger.info(f"   신규 배치 {batch_num}/{total_batches}: {count}개 ({progress:.1f}%)")
             except Exception as e:
@@ -159,8 +168,8 @@ async def collect_zentrade_all():
                 # 실패시 upsert로 재시도
                 try:
                     count = await db.bulk_upsert("raw_product_data", chunk)
-                    new_count += count
-                    saved_count += count
+                    new += count
+                    saved += count
                 except:
                     pass
     
@@ -175,54 +184,45 @@ async def collect_zentrade_all():
             
             try:
                 count = await db.bulk_upsert("raw_product_data", chunk)
-                updated_count += count
-                saved_count += count
+                updated += count
+                saved += count
                 progress = (batch_num / total_batches) * 100
                 logger.info(f"   업데이트 배치 {batch_num}/{total_batches}: {count}개 ({progress:.1f}%)")
             except Exception as e:
                 logger.error(f"   업데이트 배치 {batch_num} 실패: {e}")
     
-    save_time = (datetime.now() - start_time).total_seconds() - collection_time
+    total_time = (datetime.now() - start_time).total_seconds()
     
-    final_count = current_count + new_count
-    
-    logger.info(f"\n{'='*60}")
-    logger.info("✅ 젠트레이드 전체 수집 완료!")
-    logger.info(f"{'='*60}")
-    logger.info(f"📊 수집 결과:")
-    logger.info(f"   - 수집된 상품: {len(products)}개")
-    logger.info(f"   - 신규 저장: {new_count}개")
-    logger.info(f"   - 업데이트: {updated_count}개")
-    logger.info(f"   - 총 저장: {saved_count}개")
-    logger.info(f"   - 최종 데이터: {final_count}개")
-    logger.info(f"\n⏱️ 성능:")
-    logger.info(f"   - 수집 시간: {collection_time:.2f}초")
-    logger.info(f"   - 저장 시간: {save_time:.2f}초")
-    logger.info(f"   - 총 시간: {(collection_time + save_time):.2f}초")
-    logger.info(f"   - 수집 속도: {len(products)/collection_time:.2f}개/초")
-    logger.info(f"   - 저장 속도: {saved_count/save_time:.2f}개/초" if save_time > 0 else "   - 저장 속도: N/A")
-    logger.info(f"{'='*60}")
+    logger.info(f"\n{'='*70}")
+    logger.info("✅ 도매꾹 배치 수집 완료!")
+    logger.info(f"{'='*70}")
+    logger.info(f"   수집 상품: {len(all_products)}개 (도매꾹: {len(dome_products)}, 도매매: {len(supply_products)})")
+    logger.info(f"   신규 저장: {new}개")
+    logger.info(f"   업데이트: {updated}개")
+    logger.info(f"   총 저장: {saved}개")
+    logger.info(f"   총 시간: {total_time/60:.2f}분")
+    logger.info(f"{'='*70}")
     
     result = {
         "status": "success",
-        "collected": len(products),
-        "new": new_count,
-        "updated": updated_count,
-        "total": final_count,
+        "total_collected": len(all_products),
+        "dome_products": len(dome_products),
+        "supply_products": len(supply_products),
+        "new": new,
+        "updated": updated,
+        "total_saved": saved,
         "collection_time": collection_time,
-        "save_time": save_time,
-        "timestamp": datetime.now().isoformat()
+        "total_time": total_time
     }
+    
+    with open('domaemae_batch_result.json', 'w', encoding='utf-8') as f:
+        json.dump(result, f, ensure_ascii=False, indent=2, default=str)
+    
+    logger.info("💾 결과가 domaemae_batch_result.json에 저장되었습니다")
     
     return result
 
 
 if __name__ == "__main__":
-    result = asyncio.run(collect_zentrade_all())
-    
-    # 결과 저장
-    with open('zentrade_collection_result.json', 'w', encoding='utf-8') as f:
-        json.dump(result, f, ensure_ascii=False, indent=2, default=str)
-    
-    logger.info("💾 결과가 zentrade_collection_result.json에 저장되었습니다")
+    asyncio.run(collect_domaemae_full_catalog())
 
