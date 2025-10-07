@@ -386,6 +386,168 @@ class DomaemaeDataCollector:
         except Exception as e:
             self.error_handler.log_error(e, f"모든 시장 배치 수집 실패: {account_name}")
             return {}
+    
+    async def collect_orders(self, account_name: str,
+                           market: str = "dome",
+                           start_date: Optional[str] = None,
+                           end_date: Optional[str] = None,
+                           order_status: Optional[str] = None,
+                           seller_id: Optional[str] = None,
+                           page: int = 1,
+                           size: int = 200) -> List[Dict[str, Any]]:
+        """주문 데이터 수집 (도매꾹/도매매 구분)"""
+        try:
+            market_name = self.market_info[market]["name"]
+            logger.info(f"{market_name} 주문 데이터 수집 시작: {account_name} (시장: {market})")
+            
+            # 인증 정보 가져오기
+            credentials = await self.token_manager.get_credentials(account_name)
+            
+            # API 파라미터 구성
+            params = {
+                "ver": credentials["version"],
+                "mode": "getOrderList",  # 주문 목록 조회
+                "aid": credentials["api_key"],
+                "market": market,
+                "om": "json",  # JSON 형식
+                "sz": size,
+                "pg": page
+            }
+            
+            # 선택적 파라미터 추가
+            if start_date:
+                params["startDate"] = start_date
+            if end_date:
+                params["endDate"] = end_date
+            if order_status:
+                params["orderStatus"] = order_status
+            if seller_id:
+                params["sellerId"] = seller_id
+            
+            # None 값 제거
+            params = {k: v for k, v in params.items() if v is not None}
+            
+            # API 요청
+            result = await self._make_api_request(params)
+            
+            if not result:
+                logger.error(f"{market_name} 주문 API 응답 없음")
+                return []
+            
+            # 응답 데이터 파싱
+            orders = await self._parse_order_response(result)
+            
+            # 시장별 메타데이터 추가
+            for order in orders:
+                order["account_name"] = account_name
+                order["market"] = market
+                order["market_name"] = market_name
+                order["market_type"] = self.market_info[market]["supplier_type"]
+                order["collected_at"] = datetime.utcnow().isoformat()
+            
+            logger.info(f"{market_name} 주문 데이터 수집 완료: {len(orders)}개")
+            return orders
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"{market_name} 주문 데이터 수집 실패: {account_name}")
+            return []
+    
+    async def _parse_order_response(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """주문 API 응답 파싱"""
+        try:
+            orders = []
+            
+            # 도매꾹 주문 JSON 응답 구조 확인
+            if "domeggook" in response:
+                domeggook_data = response["domeggook"]
+                
+                if "orderList" in domeggook_data and "order" in domeggook_data["orderList"]:
+                    order_items = domeggook_data["orderList"]["order"]
+                    
+                    # 단일 주문인 경우 리스트로 변환
+                    if not isinstance(order_items, list):
+                        order_items = [order_items]
+                    
+                    for order_item in order_items:
+                        order_data = {
+                            "order_id": str(order_item.get("orderNo", "")),
+                            "order_date": order_item.get("orderDate", ""),
+                            "order_status": order_item.get("orderStatus", ""),
+                            "total_amount": int(order_item.get("totalAmount", 0)) if order_item.get("totalAmount") else 0,
+                            "shipping_fee": int(order_item.get("shippingFee", 0)) if order_item.get("shippingFee") else 0,
+                            "buyer_name": order_item.get("buyerName", ""),
+                            "buyer_phone": order_item.get("buyerPhone", ""),
+                            "shipping_address": order_item.get("shippingAddress", ""),
+                            "payment_method": order_item.get("paymentMethod", ""),
+                            "seller_id": order_item.get("sellerId", ""),
+                            "seller_nick": order_item.get("sellerNick", ""),
+                            "order_items": order_item.get("orderItems", []),
+                            "memo": order_item.get("memo", ""),
+                            "tracking_number": order_item.get("trackingNumber", "")
+                        }
+                        
+                        orders.append(order_data)
+                
+                # 헤더 정보도 로깅
+                if "header" in domeggook_data:
+                    header = domeggook_data["header"]
+                    logger.info(f"도매꾹 주문 응답 헤더 - 총 주문: {header.get('numberOfOrders', 0)}, 현재 페이지: {header.get('currentPage', 1)}")
+            
+            # 에러 응답인 경우
+            elif "errors" in response:
+                error_info = response["errors"]
+                logger.error(f"도매꾹 주문 API 에러: {error_info.get('message', 'Unknown error')}")
+                return []
+            
+            else:
+                logger.warning(f"예상하지 못한 주문 응답 형식: {list(response.keys())}")
+                return []
+            
+            return orders
+            
+        except Exception as e:
+            self.error_handler.log_error(e, "도매꾹 주문 API 응답 파싱 실패")
+            return []
+    
+    async def collect_orders_batch(self, account_name: str,
+                                 batch_size: int = 200,
+                                 max_pages: int = 10,
+                                 market: str = "dome",
+                                 **kwargs) -> List[Dict[str, Any]]:
+        """주문 데이터 배치 수집 (단일 시장)"""
+        try:
+            market_name = self.market_info[market]["name"]
+            logger.info(f"{market_name} 주문 데이터 배치 수집 시작: {account_name} (배치 크기: {batch_size}, 최대 페이지: {max_pages})")
+            
+            all_orders = []
+            
+            for page in range(1, max_pages + 1):
+                logger.info(f"{market_name} 주문 페이지 {page} 수집 중...")
+                
+                orders = await self.collect_orders(
+                    account_name=account_name,
+                    market=market,
+                    size=batch_size,
+                    page=page,
+                    **kwargs
+                )
+                
+                if not orders:
+                    logger.info(f"{market_name} 주문 페이지 {page}에서 주문을 찾지 못했습니다. 수집을 종료합니다.")
+                    break
+                
+                all_orders.extend(orders)
+                logger.info(f"{market_name} 주문 페이지 {page} 완료: {len(orders)}개 주문")
+                
+                # API 호출 간격 조절
+                await asyncio.sleep(0.5)
+            
+            logger.info(f"{market_name} 주문 배치 수집 완료: 총 {len(all_orders)}개 주문")
+            return all_orders
+            
+        except Exception as e:
+            self.error_handler.log_error(e, f"{market_name} 주문 배치 수집 실패: {account_name}")
+            return []
 
 
 class DomaemaeDataStorage:
@@ -524,4 +686,93 @@ class DomaemaeDataStorage:
             return saved_count
         except Exception as e:
             self.error_handler.log_error(e, "도매꾹 상품 데이터 저장 실패")
+            return 0
+    
+    async def save_orders(self, orders: List[Dict[str, Any]]) -> int:
+        """주문 데이터 저장 (시장별 구분)"""
+        try:
+            if not orders:
+                logger.info("저장할 주문 데이터가 없습니다")
+                return 0
+            
+            # 시장별로 그룹화
+            market_groups = {}
+            for order in orders:
+                market = order.get("market", "dome")
+                if market not in market_groups:
+                    market_groups[market] = []
+                market_groups[market].append(order)
+            
+            logger.info(f"도매꾹 주문 데이터 저장 시작: {len(orders)}개 (시장별: {dict((k, len(v)) for k, v in market_groups.items())})")
+            
+            saved_count = 0
+            for market, market_orders in market_groups.items():
+                market_name = "도매꾹" if market == "dome" else "도매매"
+                logger.info(f"{market_name} 주문 저장 시작: {len(market_orders)}개")
+                
+                for order in market_orders:
+                    try:
+                        # 시장별 공급사 코드 결정
+                        supplier_code = self.market_supplier_mapping.get(market, "domaemae")
+                        
+                        # 주문 데이터 저장 (raw_order_data 테이블)
+                        raw_data = {
+                            "supplier_id": await self._get_supplier_id(supplier_code),
+                            "supplier_account_id": await self._get_supplier_account_id(supplier_code, order["account_name"]),
+                            "raw_data": json.dumps(order, ensure_ascii=False),
+                            "collection_method": "api",
+                            "collection_source": "https://domeggook.com/ssl/api/",
+                            "supplier_order_id": f"{market}_{order['order_id']}",  # 시장 구분을 위한 접두사
+                            "is_processed": False,
+                            "data_hash": self._calculate_hash(order),
+                            "metadata": json.dumps({
+                                "collected_at": order["collected_at"],
+                                "account_name": order["account_name"],
+                                "market": order.get("market", ""),
+                                "market_name": order.get("market_name", ""),
+                                "market_type": order.get("market_type", ""),
+                                "order_date": order.get("order_date", ""),
+                                "order_status": order.get("order_status", ""),
+                                "total_amount": order.get("total_amount", 0)
+                            }, ensure_ascii=False)
+                        }
+                        
+                        # 기존 주문 데이터 확인 (시장 구분된 ID로)
+                        order_id = f"{market}_{order['order_id']}"
+                        existing = await self.db_service.select_data(
+                            "raw_order_data",
+                            {"supplier_order_id": order_id}
+                        )
+                        
+                        if existing:
+                            # 업데이트
+                            update_result = await self.db_service.update_data(
+                                "raw_order_data",
+                                {"supplier_order_id": order_id},
+                                raw_data
+                            )
+                            if update_result:
+                                logger.debug(f"{market_name} 주문 데이터 업데이트: {order_id}")
+                            else:
+                                logger.warning(f"{market_name} 주문 데이터 업데이트 실패 (레코드 없음): {order_id}")
+                                # 업데이트 실패 시 새로 삽입 시도
+                                await self.db_service.insert_data("raw_order_data", raw_data)
+                                logger.debug(f"{market_name} 주문 데이터 삽입 (업데이트 실패 후): {order_id}")
+                        else:
+                            # 새로 삽입
+                            await self.db_service.insert_data("raw_order_data", raw_data)
+                            logger.debug(f"{market_name} 주문 데이터 삽입: {order_id}")
+                        
+                        saved_count += 1
+                        
+                    except Exception as e:
+                        self.error_handler.log_error(e, f"{market_name} 주문 저장 실패: {order.get('order_id', 'Unknown')}")
+                        continue
+                
+                logger.info(f"{market_name} 주문 저장 완료: {len(market_orders)}개")
+            
+            logger.info(f"도매꾹 주문 데이터 저장 완료: 총 {saved_count}개")
+            return saved_count
+        except Exception as e:
+            self.error_handler.log_error(e, "도매꾹 주문 데이터 저장 실패")
             return 0
