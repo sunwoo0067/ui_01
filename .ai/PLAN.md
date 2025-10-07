@@ -21,14 +21,14 @@
 
 ### 1.2 API 키 설정
 - [x] Settings → API에서 키 복사
-  - [x] Project URL: https://vecvkvumzhldioifgbxb.supabase.co
-  - [x] anon (public) key: eyJhbGciOiJIUzI1NiIs...
-  - [x] service_role key: eyJhbGciOiJIUzI1NiIs...
+  - [x] Project URL: `<internal Supabase project URL>`
+  - [x] anon (public) key: `<refer to secure secrets vault>`
+  - [x] service_role key: `<refer to secure secrets vault>`
 - [x] `.env` 파일에 키 입력 완료
   ```env
-  SUPABASE_URL=https://xxxxx.supabase.co
-  SUPABASE_KEY=your_anon_key
-  SUPABASE_SERVICE_KEY=your_service_role_key
+  SUPABASE_URL=<your_project_url>
+  SUPABASE_KEY=<your_anon_key>
+  SUPABASE_SERVICE_KEY=<your_service_role_key>
   ```
 
 ### 1.3 데이터베이스 마이그레이션

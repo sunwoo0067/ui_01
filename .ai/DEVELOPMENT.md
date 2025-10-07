@@ -6,11 +6,11 @@
 ## 프로젝트 정보
 - **프로젝트명**: 드롭쉬핑 멀티공급사/멀티계정 자동화 시스템
 - **프로젝트 타입**: Python 백엔드 자동화 (개인용, 배포 없음)
-- **현재 상태**: **Phase 1 완료, Phase 2 준비 완료**
-- **개발 환경**: Multi-AI Editor (Claude Code, Codex, Cursor, Windsurf)
+- **현재 상태**: **Phase 3 진행 중 (90% 완료) - 공급사 결제·거래 정규화 단계 완료**
+- **개발 환경**: Multi-AI Editor (Claude Code, Cursor, Windsurf, Codex/Cline)
 - **언어**: Python 3.12.10
 - **데이터베이스**: Supabase (PostgreSQL + pgvector)
-- **데이터 규모**: 실제 상품 데이터 3,510개 처리 가능
+- **코드베이스 규모**: 550개 Python 파일, 171,064행 실행 코드, 10개 SQL 마이그레이션 2,699행
 
 ## 핵심 원칙
 

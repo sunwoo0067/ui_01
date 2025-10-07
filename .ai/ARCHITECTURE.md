@@ -55,8 +55,21 @@ ui_01/
 - **역할**: 핵심 비즈니스 로직 및 외부 API 통합
 - **주요 서비스**:
   - `supabase_client.py`: Supabase 클라이언트 관리 (동기/비동기)
+  - `database_service.py`: 범용 데이터베이스 CRUD 추상화 레이어
   - `batch_upload.py`: 대량 상품 배치 업로드
   - `image_processor.py`: 이미지 최적화 및 Storage 업로드
+  - `collection_service.py`: API/엑셀/웹 크롤링 수집을 오케스트레이션
+  - `product_pipeline.py`: raw_product_data → normalized_products 변환 파이프라인
+  - `transaction_system.py`: 주문 생성·변경·취소를 담당하는 트랜잭션 허브
+  - `payment_shipping_automation.py`: 결제/배송 자동화 워크플로
+  - `supplier_credit_manager.py`: 공급사 적립금 결제 시스템 (크레딧 잔액·거래 관리)
+  - `order_tracking_service.py`: 주문 상태 추적 및 업데이트 자동화
+  - `marketplace_competitor_service.py`: 오픈마켓 경쟁 정보 수집/분석
+  - `ai_price_prediction_service.py`: AI 기반 가격 예측 및 시장 분석 (ML 모델)
+  - **공급사별 데이터 수집기**:
+    - `ownerclan_data_collector.py`: 오너클랜 GraphQL API (allItems 쿼리)
+    - `zentrade_data_collector.py`: 젠트레이드 XML API (POST 요청)
+    - `domaemae_data_collector.py`: 도매꾹/도매매 키워드 검색 API
 
 #### 2. Model Layer (데이터 모델)
 - **위치**: `src/models/`
@@ -70,11 +83,30 @@ ui_01/
 - **위치**: `database/migrations/`
 - **역할**: PostgreSQL 스키마 및 RLS 정책
 - **주요 테이블**:
-  - `products`: 상품 마스터
-  - `upload_batches`: 업로드 배치 관리
-  - `marketplaces`: 연동 쇼핑몰
-  - `product_mappings`: 상품-쇼핑몰 매핑
-  - `image_metadata`: 이미지 메타데이터
+  - **상품 데이터**:
+    - `suppliers`: 공급사 마스터 (3개: OwnerClan, Zentrade, Domaemae)
+    - `supplier_accounts`: 공급사 API 계정 및 인증 정보 (JSONB)
+    - `raw_product_data`: 원본 수집 데이터 (공급사별 JSON 원본 보존)
+    - `normalized_products`: 정규화된 상품 데이터 (통합 스키마)
+    - `products`: 상품 마스터 (레거시)
+    - `upload_batches`: 업로드 배치 관리
+  - **마켓플레이스 연동**:
+    - `marketplaces`: 연동 쇼핑몰 (네이버, 쿠팡, 11번가 등)
+    - `marketplace_accounts`: 마켓플레이스별 판매 계정
+    - `product_mappings`: 상품-쇼핑몰 매핑
+  - **거래 및 결제**:
+    - `orders`: 주문 정보
+    - `order_tracking`: 주문 상태 추적 (배송·처리 단계)
+    - `supplier_points_balance`: 공급사별 적립금 잔액
+    - `supplier_points_transactions`: 적립금 충전·사용 내역
+    - `supplier_credits`: 공급사 크레딧 잔액 (레거시)
+    - `credit_transactions`: 크레딧 거래 내역 (레거시)
+  - **경쟁사 분석 및 AI**:
+    - `competitor_products`: 경쟁사 상품 데이터 (쿠팡/네이버)
+    - `price_predictions`: AI 가격 예측 결과
+    - `market_trend_analysis`: 시장 트렌드 분석 결과
+  - **이미지 및 메타데이터**:
+    - `image_metadata`: 이미지 메타데이터 (Supabase Storage 연동)
 
 #### 4. Configuration Layer (설정)
 - **위치**: `src/config/`
@@ -110,6 +142,35 @@ ui_01/
 - **용도**: 외부 API 통합, 웹훅 처리
 
 ## 데이터 흐름
+
+### 공급사 데이터 수집 프로세스
+
+#### 오너클랜 (OwnerClan) - GraphQL API
+1. **인증** → JWT 토큰 발급 (30일 유효)
+2. **1차 수집** → `allItems` 쿼리 (1000개씩 pagination)
+3. **데이터 정규화** → 공통 포맷 변환
+4. **DB 저장** → `raw_product_data` 테이블
+5. **배치 완료** → 수집 상태 업데이트
+
+#### 도매매 (Domaemae) - JSON API
+1. **인증** → API Key 인증
+2. **1차 수집** → `getItemList` (200개씩 기본 정보)
+   - 키워드 검색 필수
+   - 페이징으로 전체 수집
+3. **DB 저장** → `raw_product_data` 테이블 (1차 데이터만)
+4. **소싱 대기** → 사용자가 상품 선택
+5. **2차 수집** → `getItemView` (100개씩 상세 정보)
+   - 선택된 상품만 상세 조회
+   - DB 업데이트 → 상세 정보 추가
+6. **배치 완료** → 최종 상태 업데이트
+
+**핵심 전략**: 1차 수집만 DB 저장 → 소싱 후 2차 수집 (DB 용량 절약, API 호출 최소화)
+
+#### 젠트레이드 (Zentrade) - XML API
+1. **인증** → API Key 인증
+2. **데이터 수집** → XML 응답 파싱
+3. **데이터 정규화** → 공통 포맷 변환
+4. **DB 저장** → `raw_product_data` 테이블
 
 ### 대량 업로드 프로세스
 1. **CSV 로드** → `BatchUploadService.load_from_csv()`
